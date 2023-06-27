@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>caravagnalab.github.io/rdevil/404.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/LICENSE-text.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/LICENSE.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/authors.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/index.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/reference/fit_linear_model.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/reference/index.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/reference/rdevil-package.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/reference/test_posterior_CI.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/reference/test_posterior_ROPE.html</loc>
+  </url>
+  <url>
+    <loc>caravagnalab.github.io/rdevil/reference/test_posterior_null.html</loc>
+  </url>
+</urlset>
