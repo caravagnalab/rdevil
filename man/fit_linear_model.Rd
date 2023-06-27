@@ -33,6 +33,12 @@ contains some kind of factor relate to the library size. For example,
 it might contain the total UMI of each cell (i.e. colSums(input_matrix))
 or the UMI of each cell divided by the average across all of them.}
 
+\item{group_matrix}{.}
+
+\item{gene_specific_model_tensor}{.}
+
+\item{kernel_input}{.}
+
 \item{gene_names}{Vector containing the names of the genes}
 
 \item{cell_names}{Vector containing the names of the cells}
@@ -68,6 +74,9 @@ Shared:
 \item \code{theta_bounds} ;
 \item \code{init_loc} ;
 }}
+}
+\value{
+A rdevil object of class \code{rdevil}
 }
 \description{
 Fit a generalized linear model in order to

@@ -17,9 +17,9 @@
 #' contains some kind of factor relate to the library size. For example,
 #' it might contain the total UMI of each cell (i.e. colSums(input_matrix))
 #' or the UMI of each cell divided by the average across all of them.
-#' @param group_matrix
-#' @param gene_specific_model_tensor
-#' @param kernel_input
+#' @param group_matrix .
+#' @param gene_specific_model_tensor .
+#' @param kernel_input .
 #' @param gene_names Vector containing the names of the genes
 #' @param cell_names Vector containing the names of the cells
 #' @param inference_method String. Either "SVI" or "HMC"
@@ -50,10 +50,8 @@
 #' * `theta_bounds` ;
 #' * `init_loc` ;
 #'
-#' @return
+#' @return A rdevil object of class `rdevil`
 #' @export
-#'
-#' @examples
 fit_linear_model <- function(
     input_matrix,
     model_matrix,

@@ -15,6 +15,10 @@ estimated should be tested against each other.}
 
 \item{alpha}{Significance level for the p-values. Default is 0.05.}
 }
+\value{
+A data.frame with \code{gene}, \code{log_FC}, \code{p_value},
+\code{p_value_adj} and \code{is_significant} columns
+}
 \description{
 Test null posterior SVI
 }

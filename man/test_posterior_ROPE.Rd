@@ -13,7 +13,10 @@ test_posterior_ROPE(inference_res, contrast, LFC = 0.5)
 conditions in the design matrix indicating how the coefficients
 estimated should be tested against each other.}
 
-\item{LFC}{}
+\item{LFC}{Log fold change required for testing. Default is 0.5.}
+}
+\value{
+A data.frame with \code{gene}, \code{log_FC} and \code{ROPE} columns
 }
 \description{
 Test posterior ROPE SVI

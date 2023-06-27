@@ -6,10 +6,9 @@
 #' estimated should be tested against each other.
 #' @param alpha Significance level for the p-values. Default is 0.05.
 #'
-#' @return
+#' @return A data.frame with `gene`, `log_FC`, `p_value`,
+#' `p_value_adj` and `is_significant` columns
 #' @export
-#'
-#' @examples
 test_posterior_null <- function(
     inference_res,
     contrast,
@@ -44,12 +43,11 @@ test_posterior_null <- function(
 #' @param contrast Vector with the same number of rows as the number of
 #' conditions in the design matrix indicating how the coefficients
 #' estimated should be tested against each other.
-#' @param credible_mass
+#' @param credible_mass Credible interval required for testing. Default is 0.95.
 #'
-#' @return
+#' @return A data.frame with `gene`, `log_FC`, `CI_low`,
+#' `CI_high` and `is_zero_in` columns
 #' @export
-#'
-#' @examples
 test_posterior_CI <- function(
     inference_res,
     contrast,
@@ -84,12 +82,10 @@ test_posterior_CI <- function(
 #' @param contrast Vector with the same number of rows as the number of
 #' conditions in the design matrix indicating how the coefficients
 #' estimated should be tested against each other.
-#' @param LFC
+#' @param LFC Log fold change required for testing. Default is 0.5.
 #'
-#' @return
+#' @return A data.frame with `gene`, `log_FC` and `ROPE` columns
 #' @export
-#'
-#' @examples
 test_posterior_ROPE <- function(
     inference_res,
     contrast,

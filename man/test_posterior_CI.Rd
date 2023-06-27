@@ -13,7 +13,11 @@ test_posterior_CI(inference_res, contrast, credible_mass = 0.95)
 conditions in the design matrix indicating how the coefficients
 estimated should be tested against each other.}
 
-\item{credible_mass}{}
+\item{credible_mass}{Credible interval required for testing. Default is 0.95.}
+}
+\value{
+A data.frame with \code{gene}, \code{log_FC}, \code{CI_low},
+\code{CI_high} and \code{is_zero_in} columns
 }
 \description{
 Test credible interval SVI
