@@ -1,2 +1,27 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
 # rdevil
-A R Framework for Single Cell Differential Expression Analysis
+
+<!-- badges: start -->
+
+[![R-CMD-check](https://github.com/caravagnalab/rdevil/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/caravagnalab/rdevil/actions/workflows/R-CMD-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/caravagnalab/rdevil/branch/main/graph/badge.svg)](https://app.codecov.io/gh/caravagnalab/rdevil?branch=main)
+<!-- badges: end -->
+
+The goal of rdevil is to …
+
+## Installation
+
+You can install the development version of rdevil from
+[GitHub](https://github.com/) with:
+
+``` r
+# install.packages("devtools")
+devtools::install_github("caravagnalab/rdevil")
+```
+
+## Example
+
+TODO
