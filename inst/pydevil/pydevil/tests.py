@@ -41,12 +41,18 @@ def posterior_CI(inference_res,contrast, credible_mass = 0.95):
     
     variance_term = (inference_res["params"]["variance"].diagonal(0,2,1) * contrast**2).sum(axis = 1)
 
+    # covariance_term = 0
+    # if np.where(contrast > 0)[0] > 1:
+    #     total_terms = len(contrast)
+    #     for i in range(1, total_terms):
+    #         for j in range(0, i - 1):
+    #             covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
+
     covariance_term = 0
-    if np.where(contrast > 0)[0] > 1:
-        total_terms = len(contrast)
-        for i in range(1, total_terms):
-            for j in range(0, i - 1):
-                covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
+    total_terms = len(contrast)
+    for i in range(1, total_terms):
+        for j in range(0, i - 1):
+            covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
 
     total_variance = variance_term + covariance_term
     lower = (1 - credible_mass) / 2 
@@ -65,12 +71,18 @@ def test_posterior_ROPE(inference_res,contrast, LFC = 0.5):
     
     variance_term = (inference_res["params"]["variance"].diagonal(0,2,1) * contrast**2).sum(axis = 1)
 
+    # covariance_term = 0
+    # if np.where(contrast > 0)[0] > 1:
+    #     total_terms = len(contrast)
+    #     for i in range(1, total_terms):
+    #         for j in range(0, i - 1):
+    #             covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
+
     covariance_term = 0
-    if np.where(contrast > 0)[0] > 1:
-        total_terms = len(contrast)
-        for i in range(1, total_terms):
-            for j in range(0, i - 1):
-                covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
+    total_terms = len(contrast)
+    for i in range(1, total_terms):
+        for j in range(0, i - 1):
+            covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
 
     total_variance = variance_term + covariance_term
 

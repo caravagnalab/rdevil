@@ -1,17 +1,10 @@
-import pandas as pd
 import numpy as np
 import torch
 
 import pyro 
 import pyro.distributions as dist
-from torch.distributions import constraints
-from pyro.infer import SVI, Trace_ELBO, JitTrace_ELBO, TraceGraph_ELBO, NUTS, MCMC
-from pyro.infer.autoguide import AutoMultivariateNormal
+from pyro.infer import Trace_ELBO, JitTrace_ELBO, NUTS, MCMC
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-import sys
 from tqdm import trange
 
 from pydevil.model import model
@@ -46,11 +39,6 @@ def run_SVDE(
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
         torch.set_default_tensor_type(t=torch.FloatTensor)
-
-    if jit_compile and not cuda:
-        pyro_loss = JitTrace_ELBO
-    else:
-        pyro_loss = Trace_ELBO
         
     if batch_size > input_matrix.shape[0]:
         batch_size = input_matrix.shape[0]
@@ -60,10 +48,6 @@ def run_SVDE(
         kernel_input = torch.tensor(kernel_input).float()
         
     lrd = gamma_lr ** (1 / steps)
-
-    
-    
-
     
     input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix).float(), torch.tensor(ncounts).float()
 
@@ -88,7 +72,9 @@ def run_SVDE(
         
     svi = pyro.infer.SVI(model, guide, optimizer, pyro.infer.TraceGraph_ELBO())
 
-    for i in t:
+    print("Start inference")
+
+    for _ in t:
 
         input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
         gene_specific_model_tensor_batch, kernel_input_batch =  \
@@ -102,7 +88,8 @@ def run_SVDE(
         init_loc = init_loc)       
 
         elbo_list.append(loss)
-        t.set_description('ELBO: {:.5f}  '.format(loss))
+        norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
+        t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
         t.refresh()
     
     

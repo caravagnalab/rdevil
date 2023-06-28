@@ -23,9 +23,6 @@ def model(input_matrix,
   n_features = model_matrix.shape[1]
   lengthscale = torch.ones(n_genes)
 
-  
-     
-  
   with pyro.plate("genes", n_genes, dim = -1):
     theta = pyro.sample("theta", dist.Uniform(theta_bounds[0],theta_bounds[1]))
     beta_prior_mu = torch.zeros(n_features)
@@ -68,8 +65,8 @@ def model(input_matrix,
 
         # print(theta.max())
         # print(theta.min())
-        #pyro.sample("obs", dist.GammaPoisson(rate = torch.clamp(torch.exp(eta + torch.log(theta)),0, 1e9) ,
-        #concentration= torch.clamp(1/theta, 1e-9,1e9)), obs = input_matrix)
+        # pyro.sample("obs", dist.GammaPoisson(rate = torch.clamp(torch.exp(eta + torch.log(theta)),1e-9, 1e9) ,
+        # concentration= torch.clamp(1/theta, 1e-9,1e9)), obs = input_matrix)
         
         pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(theta),
         total_count= torch.clamp(theta, 1e-9,1e9)), obs = input_matrix)
