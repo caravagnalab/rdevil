@@ -13,6 +13,8 @@ from pydevil.utils import prepare_batch
 
 from sklearn.metrics.pairwise import rbf_kernel
 
+from utils import compute_disperion_prior
+
 def run_SVDE(
     input_matrix,
     model_matrix, 
@@ -32,7 +34,9 @@ def run_SVDE(
     full_cov = True, 
     prior_loc = 0.1,
     theta_bounds = (0., 1e16),
-    init_loc = 0.1
+    init_loc = 0.1,
+    threshold = 1e-5,
+    max_steps = 1000
 ):
   
     if cuda and torch.cuda.is_available():
@@ -47,7 +51,10 @@ def run_SVDE(
         kernel_input = rbf_kernel(kernel_input, gamma = 1.) + np.eye(kernel_input.shape[0]) * 0.1
         kernel_input = torch.tensor(kernel_input).float()
         
-    lrd = gamma_lr ** (1 / steps)
+    if steps is None:
+        lrd = gamma_lr ** (1 / max_steps)
+    else:
+        lrd = gamma_lr ** (1 / steps)
     
     input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix).float(), torch.tensor(ncounts).float()
 
@@ -67,31 +74,65 @@ def run_SVDE(
     elbo_list = [] 
 
     pyro.clear_param_store()
-    
-    t = trange(steps, desc='Bar desc', leave = True)
         
     svi = pyro.infer.SVI(model, guide, optimizer, pyro.infer.TraceGraph_ELBO())
 
-    print("Start inference")
-
-    for _ in t:
-
-        input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
-        gene_specific_model_tensor_batch, kernel_input_batch =  \
-        prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
-        gene_specific_model_tensor, kernel_input, batch_size = batch_size)
-
-        loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch,
-        gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, 
-        prior_loc = prior_loc,
-        theta_bounds = theta_bounds,
-        init_loc = init_loc)       
-
-        elbo_list.append(loss)
-        norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
-        t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
-        t.refresh()
+    dispersion_priors, dispersion_var = compute_disperion_prior(X = input_matrix)
     
+    if (steps is not None) :
+      t = trange(steps, desc='Bar desc', leave = True)
+      for _ in t:
+  
+          input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
+          gene_specific_model_tensor_batch, kernel_input_batch =  \
+          prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
+          gene_specific_model_tensor, kernel_input, batch_size = batch_size)
+  
+          loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch,
+          gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, 
+          prior_loc = prior_loc,
+          theta_bounds = theta_bounds,
+          init_loc = init_loc)       
+  
+          elbo_list.append(loss)
+          norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
+          t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
+          t.refresh()
+    else:
+        t = trange(max_steps, desc='Bar desc', leave = True)
+        k_windows = int(max_steps * .01)
+        previous_elbo = np.array([None for _ in range(k_windows)])
+        converged_iterations = 0
+
+        for i in t:
+            input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors_batch, group_matrix_batch, \
+            gene_specific_model_tensor_batch, kernel_input_batch =  \
+            prepare_batch(input_matrix, model_matrix, UMI, dispersion_priors, group_matrix,  \
+            gene_specific_model_tensor, kernel_input, batch_size = batch_size)
+    
+            loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors_batch, dispersion_var, group_matrix_batch,
+            gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, 
+            prior_loc = prior_loc,
+            theta_bounds = theta_bounds,
+            init_loc = init_loc)       
+    
+            elbo_list.append(loss)
+            norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
+            t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
+            t.refresh()
+
+            previous_elbo[i % k_windows] = loss
+            if i >= k_windows:
+                moving_avg_elbo = np.mean(previous_elbo)
+                moving_sd_elbo = np.std(previous_elbo)
+                
+                if (moving_sd_elbo / moving_avg_elbo) <= threshold:
+                    converged_iterations += 1
+                else:
+                    converged_iterations = 0
+
+                if converged_iterations == k_windows:
+                    break
     
     n_features = model_matrix.shape[1]
     coeff = pyro.param("beta_mean")

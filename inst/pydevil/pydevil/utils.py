@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pandas as pd
 from functools import reduce
-
+from scipy.optimize import curve_fit
 
 def check_is_categorical(mat):
     return (torch.sum(mat == 0) + torch.sum(mat == 1)) == (mat.shape[0] * mat.shape[1])
@@ -48,22 +48,24 @@ def init_theta(X, min_t = 0.0001, max_t = 1e6):
     return to_return.abs()
 
 
+
 def rename_for_volcano(df_markers):
     df_markers_new = df_markers.set_axis(["GENE", "EFFECTSIZE", "p_value", "P", "is_significant"], axis=1)
     df_markers_new["SNP"] = df_markers_new["GENE"]
     df_markers_new["P"] = df_markers_new["P"] + 1e-16
     return df_markers_new
 
-def prepare_batch(input_matrix, model_matrix, UMI, group_matrix, gene_specific_model_tensor, kernel_input, batch_size = 5124):
+def prepare_batch(input_matrix, model_matrix, UMI, dispersion_priors, group_matrix, gene_specific_model_tensor, kernel_input, batch_size = 5124):
     
     if batch_size >= model_matrix.shape[0]:
-        return input_matrix, model_matrix, UMI, group_matrix, gene_specific_model_tensor, kernel_input
+        return input_matrix, model_matrix, UMI, dispersion_priors, group_matrix, gene_specific_model_tensor, kernel_input
     
     idx = torch.randperm(model_matrix.shape[0])[:batch_size]
     
     input_matrix_batch = input_matrix[idx,:]
     model_matrix_batch = model_matrix[idx,:]
     UMI_batch =  UMI[idx]
+    dispersion_priors_batch = dispersion_priors[idx]
     
     if group_matrix is not None:
         group_matrix_batch = group_matrix[idx,:]
@@ -81,7 +83,7 @@ def prepare_batch(input_matrix, model_matrix, UMI, group_matrix, gene_specific_m
     else:
         kernel_input_batch = kernel_input
     
-    return input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, gene_specific_model_tensor_batch, kernel_input_batch
+    return input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors_batch, group_matrix_batch, gene_specific_model_tensor_batch, kernel_input_batch
 
 
 def from_CNA_and_clones_to_mmatrix(input_CNA, cells_to_clones, gene_coord):
@@ -120,3 +122,64 @@ def build_CNA_profile_aux(genes_to_chr,clones_profile, clone):
             result_df = pd.concat([result_df, overlap_df])
     print(result_df)   
     return result_df.loc[:,"integer_copy_number"].set_index(result_df["gene"]).rename(columns = {"integer_copy_number" : clone})
+
+def check_convergence(curr_p, previous_p, perc):
+    percentage_diff = torch.abs(curr_p - previous_p) / abs(curr_p)
+    return torch.sum(percentage_diff <= perc) >= (.95 * percentage_diff.numel())
+
+def compute_disperion_prior(X):
+    # Compute logarithm of geometric means
+    log_geo_means = torch.log(X).mean(dim=1, keepdim=True)
+
+    def calculate_sf(cnts):
+        log_cnts = torch.log(cnts)
+        valid_indices = torch.isfinite(log_geo_means) & (cnts > 0)
+        filtered_log_diff = (log_cnts - log_geo_means)[valid_indices]
+        return torch.exp(filtered_log_diff.median())
+
+    sf = torch.stack([calculate_sf(cnts) for cnts in X])
+
+    # Handle all-zero columns
+    all_zero_column = torch.isnan(sf) | (sf <= 0)
+    sf[all_zero_column] = float("nan")
+
+    if all_zero_column.any():
+        num_zero_columns = all_zero_column.sum().item()
+        print(f"{num_zero_columns} columns contain too many zeros to calculate a size factor. The size factor will be fixed to 0.001")
+        sf = sf / torch.exp(torch.log(sf).mean())
+        sf[all_zero_column] = 0.001
+    else:
+        sf = sf / torch.exp(torch.log(sf).mean())
+
+    # Compute rough dispersion
+    xim = 1 / sf.mean()
+    bv = X.var(dim=1, keepdim=True)
+    bm = X.mean(dim=1, keepdim=True)
+    dispersion_estimate = (bv - xim * bm) / bm.pow(2)
+
+    # Compute mean gene expression
+    mean_gene_expression = (X / sf).mean(dim=1)
+
+    # Fit non-linear least squares regression
+    x = mean_gene_expression.numpy()
+    y = dispersion_estimate.numpy()
+
+    def trend(x, a0, a1):
+        return a0 / x + a1
+
+    fit_params, _ = curve_fit(trend, x, y, p0=[0.1, 0.1])
+    fitted_a0 = fit_params[0]
+    fitted_a1 = fit_params[1]
+
+    # Estimate variance
+    dispersion_priors = trend(mean_gene_expression.numpy(), fitted_a0, fitted_a1)
+
+    # Calculate dispersion residuals
+    dispersion_residual = torch.log(dispersion_estimate) - torch.log(dispersion_priors)
+
+    # Calculate var_log_disp_est and exp_var_log_disp
+    var_log_disp_est = torch.median(torch.abs(dispersion_residual - torch.median(dispersion_residual))) * 1.4826
+    #exp_var_log_disp = trigamma((m - p) / 2)
+    dispersion_var = torch.max(var_log_disp_est, torch.tensor(0.25))
+
+    return dispersion_priors, dispersion_var

@@ -10,7 +10,10 @@ SVI_default_args <- function() {
     full_cov = TRUE,
     prior_loc = 10,
     theta_bounds = c(0., 1e16),
-    init_loc = 10
+    init_loc = 10,
+    threshold = 1e-5,
+    max_steps = 1000L
+
   )
 }
 

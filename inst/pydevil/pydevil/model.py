@@ -9,6 +9,8 @@ from torch.distributions import constraints
 def model(input_matrix, 
           model_matrix, 
           UMI, 
+          dispersion_priors,
+          dispersion_variance,
           group_matrix = None, 
           gene_specific_model_tensor = None,
           kernel_input = None,
@@ -24,7 +26,9 @@ def model(input_matrix,
   lengthscale = torch.ones(n_genes)
 
   with pyro.plate("genes", n_genes, dim = -1):
-    theta = pyro.sample("theta", dist.Uniform(theta_bounds[0],theta_bounds[1]))
+    # theta = pyro.sample("theta", dist.Uniform(theta_bounds[0],theta_bounds[1]))
+    theta = pyro.sample("theta", dist.LogNormal(dispersion_priors,dispersion_variance))
+
     beta_prior_mu = torch.zeros(n_features)
 
     if kernel_input is not None:
@@ -68,6 +72,6 @@ def model(input_matrix,
         # pyro.sample("obs", dist.GammaPoisson(rate = torch.clamp(torch.exp(eta + torch.log(theta)),1e-9, 1e9) ,
         # concentration= torch.clamp(1/theta, 1e-9,1e9)), obs = input_matrix)
         
-        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(theta),
-        total_count= torch.clamp(theta, 1e-9,1e9)), obs = input_matrix)
+        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta),
+        total_count= torch.clamp(1 / theta, 1e-9,1e9)), obs = input_matrix)
     

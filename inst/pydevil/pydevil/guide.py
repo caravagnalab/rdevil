@@ -12,6 +12,8 @@ from pydevil.utils import init_beta, init_theta
 def guide(input_matrix, 
           model_matrix, 
           UMI, 
+          dispersion_priors,
+          dispersion_variance,
           group_matrix = None, 
           gene_specific_model_tensor = None,
           kernel_input = None,
@@ -26,13 +28,13 @@ def guide(input_matrix,
     n_features = model_matrix.shape[1]
     
     beta_estimate = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
-    theta_estimate = init_theta(input_matrix * 1.)    
+    # theta_estimate = init_theta(input_matrix * 1.)
+    theta_estimate = dispersion_priors
     beta_mean = pyro.param("beta_mean", beta_estimate, constraint=constraints.real)
             
     if kernel_input is not None:
         lengthscale_par = pyro.param("lengthscale_param", torch.ones(n_genes), constraint=constraints.positive)
         
-                    
     if group_matrix is not None:
         n_groups = group_matrix.shape[1]
         if full_cov:
@@ -46,8 +48,9 @@ def guide(input_matrix,
         beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * init_loc, constraint=constraints.positive) 
     
     theta_p = pyro.param("theta_p", theta_estimate, constraint=constraints.positive) 
+    
     with pyro.plate("genes", n_genes, dim = -1):
-        pyro.sample("theta", dist.Delta(theta_p))
+        pyro.sample("theta", dist.LogNormal(dispersion_priors, dispersion_variance))
         
         if kernel_input is not None:
             lengthscale = pyro.sample("lengthscale", dist.Delta(lengthscale_par))

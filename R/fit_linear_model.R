@@ -34,6 +34,8 @@
 #' * `gamma_lr` parameters to tune the decay of the learning rate using "ClippedAdam";
 #' * `batch_size` number of data points or observations sampled from the input matrix in
 #' each iteration of the optimization algorithm;
+#' * `threshold` ;
+#' * `max_steps` ;
 #'
 #' HMC only:
 #'
