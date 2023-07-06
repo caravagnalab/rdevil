@@ -9,11 +9,9 @@ from tqdm import trange
 
 from pydevil.model import model
 from pydevil.guide import guide
-from pydevil.utils import prepare_batch
+from pydevil.utils import prepare_batch, compute_disperion_prior
 
 from sklearn.metrics.pairwise import rbf_kernel
-
-from utils import compute_disperion_prior
 
 def run_SVDE(
     input_matrix,
