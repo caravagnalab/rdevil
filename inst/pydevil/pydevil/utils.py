@@ -160,8 +160,8 @@ def compute_disperion_prior(X):
     mean_gene_expression = (X / sf[:, None]).mean(dim=0)
 
     # Fit non-linear least squares regression
-    x = mean_gene_expression.numpy()
-    y = dispersion_estimate.numpy()
+    x = mean_gene_expression.cpu().detach().numpy()
+    y = dispersion_estimate.cpu().detach().numpy()
 
     def trend(x, a0, a1):
         return a0 / x + a1
@@ -171,7 +171,7 @@ def compute_disperion_prior(X):
     fitted_a1 = fit_params[1]
 
     # Estimate variance
-    dispersion_priors = torch.tensor(trend(mean_gene_expression.numpy(), fitted_a0, fitted_a1))
+    dispersion_priors = torch.tensor(trend(mean_gene_expression.cpu().detach().numpy(), fitted_a0, fitted_a1))
 
     # Calculate dispersion residuals
     dispersion_residual = torch.log(dispersion_estimate) - torch.log(dispersion_priors)
