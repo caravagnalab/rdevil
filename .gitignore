@@ -1,2 +1,5 @@
 .Rproj.user
 docs
+
+inst/pydevil/data
+inst/pydevil/notebook_test

@@ -55,17 +55,16 @@ def rename_for_volcano(df_markers):
     df_markers_new["P"] = df_markers_new["P"] + 1e-16
     return df_markers_new
 
-def prepare_batch(input_matrix, model_matrix, UMI, dispersion_priors, group_matrix, gene_specific_model_tensor, kernel_input, batch_size = 5124):
+def prepare_batch(input_matrix, model_matrix, UMI, group_matrix, gene_specific_model_tensor, kernel_input, batch_size = 5124):
     
     if batch_size >= model_matrix.shape[0]:
-        return input_matrix, model_matrix, UMI, dispersion_priors, group_matrix, gene_specific_model_tensor, kernel_input
+        return input_matrix, model_matrix, UMI, group_matrix, gene_specific_model_tensor, kernel_input
     
     idx = torch.randperm(model_matrix.shape[0])[:batch_size]
     
     input_matrix_batch = input_matrix[idx,:]
     model_matrix_batch = model_matrix[idx,:]
     UMI_batch =  UMI[idx]
-    dispersion_priors_batch = dispersion_priors[idx]
     
     if group_matrix is not None:
         group_matrix_batch = group_matrix[idx,:]
@@ -83,7 +82,7 @@ def prepare_batch(input_matrix, model_matrix, UMI, dispersion_priors, group_matr
     else:
         kernel_input_batch = kernel_input
     
-    return input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors_batch, group_matrix_batch, gene_specific_model_tensor_batch, kernel_input_batch
+    return input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, gene_specific_model_tensor_batch, kernel_input_batch
 
 
 def from_CNA_and_clones_to_mmatrix(input_CNA, cells_to_clones, gene_coord):
@@ -129,7 +128,7 @@ def check_convergence(curr_p, previous_p, perc):
 
 def compute_disperion_prior(X):
     # Compute logarithm of geometric means
-    log_geo_means = torch.log(X).mean(dim=1, keepdim=True)
+    log_geo_means = torch.log(X).mean(dim=0, keepdim=True)
 
     def calculate_sf(cnts):
         log_cnts = torch.log(cnts)
@@ -150,15 +149,15 @@ def compute_disperion_prior(X):
         sf[all_zero_column] = 0.001
     else:
         sf = sf / torch.exp(torch.log(sf).mean())
-
+        
     # Compute rough dispersion
     xim = 1 / sf.mean()
-    bv = X.var(dim=1, keepdim=True)
-    bm = X.mean(dim=1, keepdim=True)
+    bv = X.float().var(dim=0)
+    bm = X.float().mean(dim=0)
     dispersion_estimate = (bv - xim * bm) / bm.pow(2)
 
     # Compute mean gene expression
-    mean_gene_expression = (X / sf).mean(dim=1)
+    mean_gene_expression = (X / sf[:, None]).mean(dim=0)
 
     # Fit non-linear least squares regression
     x = mean_gene_expression.numpy()
@@ -167,12 +166,12 @@ def compute_disperion_prior(X):
     def trend(x, a0, a1):
         return a0 / x + a1
 
-    fit_params, _ = curve_fit(trend, x, y, p0=[0.1, 0.1])
+    fit_params, _ = curve_fit(trend, x, y, p0=[0.1, 0.1], check_finite=False)
     fitted_a0 = fit_params[0]
     fitted_a1 = fit_params[1]
 
     # Estimate variance
-    dispersion_priors = trend(mean_gene_expression.numpy(), fitted_a0, fitted_a1)
+    dispersion_priors = torch.tensor(trend(mean_gene_expression.numpy(), fitted_a0, fitted_a1))
 
     # Calculate dispersion residuals
     dispersion_residual = torch.log(dispersion_estimate) - torch.log(dispersion_priors)
@@ -180,6 +179,8 @@ def compute_disperion_prior(X):
     # Calculate var_log_disp_est and exp_var_log_disp
     var_log_disp_est = torch.median(torch.abs(dispersion_residual - torch.median(dispersion_residual))) * 1.4826
     #exp_var_log_disp = trigamma((m - p) / 2)
+    if torch.isnan(var_log_disp_est): return dispersion_priors, torch.tensor(0.25)
+    
     dispersion_var = torch.max(var_log_disp_est, torch.tensor(0.25))
 
     return dispersion_priors, dispersion_var

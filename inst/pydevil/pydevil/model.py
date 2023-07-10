@@ -17,7 +17,7 @@ def model(input_matrix,
           full_cov = True,
           prior_loc = 10, 
           batch_size = 5120, 
-          theta_bounds = (1e-6, 1000000),
+          theta_bounds = (1e-9, 1000000),
           init_loc = 0.1):
   
   n_cells = input_matrix.shape[0]
@@ -26,8 +26,11 @@ def model(input_matrix,
   lengthscale = torch.ones(n_genes)
 
   with pyro.plate("genes", n_genes, dim = -1):
-    # theta = pyro.sample("theta", dist.Uniform(theta_bounds[0],theta_bounds[1]))
-    theta = pyro.sample("theta", dist.LogNormal(dispersion_priors,dispersion_variance))
+
+    #theta = pyro.sample("theta", dist.Uniform(theta_bounds[0],theta_bounds[1]))
+    theta = torch.clamp(pyro.sample("theta", dist.Normal(dispersion_priors, dispersion_variance)), theta_bounds[0], theta_bounds[1])
+    
+    # theta = pyro.sample("theta", dist.LogNormal(dispersion_priors, dispersion_variance))
 
     beta_prior_mu = torch.zeros(n_features)
 
@@ -69,9 +72,14 @@ def model(input_matrix,
 
         # print(theta.max())
         # print(theta.min())
-        # pyro.sample("obs", dist.GammaPoisson(rate = torch.clamp(torch.exp(eta + torch.log(theta)),1e-9, 1e9) ,
-        # concentration= torch.clamp(1/theta, 1e-9,1e9)), obs = input_matrix)
+        #pyro.sample("obs", dist.GammaPoisson(rate = torch.clamp(torch.exp(eta + torch.log(1 / theta)),1e-9, 1e9) ,
+        #concentration= torch.clamp(theta, 1e-9,1e9)), obs = input_matrix)
+
+        #pyro.sample("obs", dist.GammaPoisson(
+        #   concentration=torch.clamp(theta, 1e-9,1e9) , 
+        #   rate=torch.clamp(torch.exp(eta) / theta, 1e-9, 1e9)), 
+        #   obs=input_matrix)
         
-        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta),
+        pyro.sample("obs", dist.NegativeBinomial(logits = eta + torch.log(theta) ,
         total_count= torch.clamp(1 / theta, 1e-9,1e9)), obs = input_matrix)
     

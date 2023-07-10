@@ -34,7 +34,6 @@ def run_SVDE(
     theta_bounds = (0., 1e16),
     init_loc = 0.1,
     threshold = 1e-5,
-    max_steps = 1000
 ):
   
     if cuda and torch.cuda.is_available():
@@ -49,10 +48,7 @@ def run_SVDE(
         kernel_input = rbf_kernel(kernel_input, gamma = 1.) + np.eye(kernel_input.shape[0]) * 0.1
         kernel_input = torch.tensor(kernel_input).float()
         
-    if steps is None:
-        lrd = gamma_lr ** (1 / max_steps)
-    else:
-        lrd = gamma_lr ** (1 / steps)
+    lrd = gamma_lr ** (1 / steps)
     
     input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix).float(), torch.tensor(ncounts).float()
 
@@ -77,7 +73,7 @@ def run_SVDE(
 
     dispersion_priors, dispersion_var = compute_disperion_prior(X = input_matrix)
     
-    if (steps is not None) :
+    if (threshold <= 0) :
       t = trange(steps, desc='Bar desc', leave = True)
       for _ in t:
   
@@ -86,7 +82,7 @@ def run_SVDE(
           prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
           gene_specific_model_tensor, kernel_input, batch_size = batch_size)
   
-          loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch,
+          loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors, dispersion_var, group_matrix_batch,
           gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, 
           prior_loc = prior_loc,
           theta_bounds = theta_bounds,
@@ -97,18 +93,18 @@ def run_SVDE(
           t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
           t.refresh()
     else:
-        t = trange(max_steps, desc='Bar desc', leave = True)
-        k_windows = int(max_steps * .01)
+        t = trange(steps, desc='Bar desc', leave = True)
+        k_windows = int(steps * .01)
         previous_elbo = np.array([None for _ in range(k_windows)])
         converged_iterations = 0
 
         for i in t:
-            input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors_batch, group_matrix_batch, \
+            input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
             gene_specific_model_tensor_batch, kernel_input_batch =  \
-            prepare_batch(input_matrix, model_matrix, UMI, dispersion_priors, group_matrix,  \
+            prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
             gene_specific_model_tensor, kernel_input, batch_size = batch_size)
     
-            loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors_batch, dispersion_var, group_matrix_batch,
+            loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors, dispersion_var, group_matrix_batch,
             gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, 
             prior_loc = prior_loc,
             theta_bounds = theta_bounds,
@@ -160,7 +156,8 @@ def run_SVDE(
         loc = loc.detach().numpy()
         lk = lk.detach().numpy()
 
-    variance =  eta + eta**2 / overdispersion
+    #variance =  eta + eta**2 / overdispersion
+    variance =  eta + eta**2 * overdispersion
 
     ret = {"loss" : elbo_list, "params" : {
         "theta" : overdispersion,

@@ -50,7 +50,8 @@ def guide(input_matrix,
     theta_p = pyro.param("theta_p", theta_estimate, constraint=constraints.positive) 
     
     with pyro.plate("genes", n_genes, dim = -1):
-        pyro.sample("theta", dist.LogNormal(dispersion_priors, dispersion_variance))
+        # pyro.sample("theta", dist.LogNormal(dispersion_priors, dispersion_variance))
+        pyro.sample("theta", dist.Delta(theta_p))
         
         if kernel_input is not None:
             lengthscale = pyro.sample("lengthscale", dist.Delta(lengthscale_par))
