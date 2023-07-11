@@ -156,8 +156,8 @@ def run_SVDE(
         loc = loc.detach().numpy()
         lk = lk.detach().numpy()
 
-    #variance =  eta + eta**2 / overdispersion
-    variance =  eta + eta**2 * overdispersion
+    variance =  eta + eta**2 / overdispersion
+    # variance =  eta + eta**2 * overdispersion
 
     ret = {"loss" : elbo_list, "params" : {
         "theta" : overdispersion,

@@ -1,9 +1,9 @@
 SVI_default_args <- function() {
   list(
     optimizer_name = "ClippedAdam",
-    steps = 100L,
-    lr = 0.1,
-    gamma_lr = 0.1,
+    steps = 500L,
+    lr = 0.5,
+    gamma_lr = 1e-04,
     cuda = FALSE,
     jit_compile = FALSE,
     batch_size = 5120L,

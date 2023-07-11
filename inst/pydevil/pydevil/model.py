@@ -80,6 +80,6 @@ def model(input_matrix,
         #   rate=torch.clamp(torch.exp(eta) / theta, 1e-9, 1e9)), 
         #   obs=input_matrix)
         
-        pyro.sample("obs", dist.NegativeBinomial(logits = eta + torch.log(theta) ,
-        total_count= torch.clamp(1 / theta, 1e-9,1e9)), obs = input_matrix)
+        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(theta) ,
+        total_count= torch.clamp(theta, 1e-9,1e9)), obs = input_matrix)
     

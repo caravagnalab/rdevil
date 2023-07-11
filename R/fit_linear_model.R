@@ -34,8 +34,8 @@
 #' * `gamma_lr` parameters to tune the decay of the learning rate using "ClippedAdam";
 #' * `batch_size` number of data points or observations sampled from the input matrix in
 #' each iteration of the optimization algorithm;
-#' * `threshold` ;
-#' * `max_steps` ;
+#' * `threshold` parameters to stop the inference earlier when convergence is reached.
+#' Default value is set to 0, i.e. all steps will be done;
 #'
 #' HMC only:
 #'
@@ -46,7 +46,7 @@
 #'
 #' Shared:
 #'
-#' * `cuda` ;
+#' * `cuda` Boolean, indicates if CUDA should be used if available;
 #' * `jit_compile` ;
 #' * `full_cov` ;
 #' * `theta_bounds` ;

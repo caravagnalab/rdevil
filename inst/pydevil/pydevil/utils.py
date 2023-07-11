@@ -162,11 +162,10 @@ def compute_disperion_prior(X):
     # Fit non-linear least squares regression
     x = mean_gene_expression.cpu().detach().numpy()
     y = dispersion_estimate.cpu().detach().numpy()
-
     def trend(x, a0, a1):
-        return a0 / x + a1
+        return a0 / x**(1/2) + a1
 
-    fit_params, _ = curve_fit(trend, x, y, p0=[0.1, 0.1], check_finite=False)
+    fit_params, _ = curve_fit(trend, x, y, check_finite=False, bounds=((0, 0), (1e16, 1e16)))
     fitted_a0 = fit_params[0]
     fitted_a1 = fit_params[1]
 
@@ -183,4 +182,4 @@ def compute_disperion_prior(X):
     
     dispersion_var = torch.max(var_log_disp_est, torch.tensor(0.25))
 
-    return dispersion_priors, dispersion_var
+    return 1 / dispersion_priors, dispersion_var
