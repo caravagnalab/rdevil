@@ -144,9 +144,9 @@ def compute_disperion_prior(X):
 
     if all_zero_column.any():
         num_zero_columns = all_zero_column.sum().item()
-        print(f"{num_zero_columns} columns contain too many zeros to calculate a size factor. The size factor will be fixed to 0.001")
+        print(f"{num_zero_columns} columns contain too many zeros to calculate a size factor. A rough estimate will be used.")
         sf = sf / torch.exp(torch.log(sf).mean())
-        sf[all_zero_column] = 0.001
+        sf[all_zero_column] = (torch.sum(X.float(),dim=1) / (torch.sum(X.float(),dim=1).mean(dim=0)))[all_zero_column]
     else:
         sf = sf / torch.exp(torch.log(sf).mean())
         

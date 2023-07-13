@@ -23,17 +23,17 @@ def run_SVDE(
     gene_names = None,
     cell_names = None,
     optimizer_name = "ClippedAdam",
-    steps = 100, 
-    lr = 0.1,
-    gamma_lr = 0.1,
+    steps = 500, 
+    lr = 0.5,
+    gamma_lr = 1e-04,
     cuda = False,
     jit_compile = False,
     batch_size = 5120, 
     full_cov = True, 
-    prior_loc = 0.1,
+    prior_loc = 10,
     theta_bounds = (0., 1e16),
-    init_loc = 0.1,
-    threshold = 1e-5,
+    init_loc = 10,
+    threshold = 0,
 ):
   
     if cuda and torch.cuda.is_available():
