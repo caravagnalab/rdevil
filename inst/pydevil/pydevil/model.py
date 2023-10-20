@@ -1,14 +1,11 @@
-import pandas as pd
-import numpy as np
 import torch
-
 import pyro 
 import pyro.distributions as dist
-from torch.distributions import constraints
 
 def model(input_matrix, 
           model_matrix, 
           UMI, 
+          beta_estimate,
           dispersion_priors,
           dispersion_variance,
           group_matrix = None, 
@@ -46,6 +43,7 @@ def model(input_matrix,
         zeta = pyro.sample("zeta", dist.MultivariateNormal(torch.zeros(n_genes, n_groups), scale_tril=torch.eye(n_groups, n_groups) * prior_loc, validate_args=False))
       else:
         zeta = pyro.sample("zeta", dist.Normal(torch.zeros(n_genes, n_groups), torch.ones(n_groups) * prior_loc).to_event(1))
+        
     if gene_specific_model_tensor is not None:
         n_features_gs = gene_specific_model_tensor.shape[1]
         beta_prior_mu_gs = torch.zeros(n_features_gs)
@@ -59,9 +57,9 @@ def model(input_matrix,
     else:
       beta = pyro.sample("beta", dist.Normal(beta_prior_mu, torch.ones(n_features) * prior_loc).to_event(1))
 
-    
     with pyro.plate("data", n_cells, dim = -2):
         eta = torch.matmul(model_matrix, beta.T)  + torch.log(UMI).unsqueeze(1)
+        
         if group_matrix is not None:
             eta_zeta = torch.matmul(group_matrix , zeta.T)
             eta = eta + eta_zeta
@@ -74,12 +72,8 @@ def model(input_matrix,
         # print(theta.min())
         #pyro.sample("obs", dist.GammaPoisson(rate = torch.clamp(torch.exp(eta + torch.log(1 / theta)),1e-9, 1e9) ,
         #concentration= torch.clamp(theta, 1e-9,1e9)), obs = input_matrix)
-
-        #pyro.sample("obs", dist.GammaPoisson(
-        #   concentration=torch.clamp(theta, 1e-9,1e9) , 
-        #   rate=torch.clamp(torch.exp(eta) / theta, 1e-9, 1e9)), 
-        #   obs=input_matrix)
         
-        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(theta) ,
-        total_count= torch.clamp(theta, 1e-9,1e9)), obs = input_matrix)
+        # pyro.sample("obs", dist.GammaPoisson(concentration=theta, rate=theta / torch.exp(eta)), obs = input_matrix)
+        
+        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(theta) , total_count=theta), obs = input_matrix)
     

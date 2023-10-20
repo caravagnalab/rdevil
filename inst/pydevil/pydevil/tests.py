@@ -3,27 +3,26 @@ from scipy.stats import norm
 from statsmodels.stats.multitest import fdrcorrection
 import pandas as pd
 
-
-
 def test_posterior_null(inference_res,contrast, alpha = 0.05):
-    mu_test = (inference_res["params"]["beta"] * contrast.reshape([-1,1])).sum(axis = 0)
-    
-    variance_term = (inference_res["params"]["variance"].diagonal(0,2,1) * contrast**2).sum(axis = 1)
+    full_cov = inference_res['hyperparams']['full_cov']
 
-    # covariance_term = 0
-    # if np.where(contrast > 0)[0] > 1:
-    #     total_terms = len(contrast)
-    #     for i in range(1, total_terms):
-    #         for j in range(0, i - 1):
-    #             covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
+    if full_cov:
+        mu_test = (inference_res["params"]["beta"] * contrast.reshape([-1,1])).sum(axis = 0)
     
-    covariance_term = 0
-    total_terms = len(contrast)
-    for i in range(1, total_terms):
-        for j in range(0, i - 1):
-            covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
+        variance_term = (inference_res["params"]["variance"].diagonal(0,2,1) * contrast**2).sum(axis = 1)
+        
+        covariance_term = 0
+        total_terms = len(contrast)
+        for i in range(1, total_terms):
+            for j in range(0, i - 1):
+                covariance_term += contrast[i] * contrast[j] * inference_res["params"]["variance"][:,i,j]
 
-    total_variance = variance_term + covariance_term
+        total_variance = (variance_term + covariance_term)
+    else:
+        mu_test = (inference_res["params"]["beta"] * contrast.reshape([-1,1])).sum(axis = 0)
+    
+        variance_term = (inference_res["params"]["variance"]**2 * abs(contrast)).sum(axis = 1)
+        total_variance = variance_term
 
     p_value = 2 * (1 - norm.cdf(np.abs(mu_test), scale = np.sqrt(total_variance)))
     is_significant, p_value_adj = fdrcorrection(p_value, alpha=alpha)

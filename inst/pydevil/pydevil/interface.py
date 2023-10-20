@@ -8,8 +8,10 @@ from pyro.infer import Trace_ELBO, JitTrace_ELBO, NUTS, MCMC
 from tqdm import trange
 
 from pydevil.model import model
+from pydevil.scheduler import myOneCycleLR
 from pydevil.guide import guide
-from pydevil.utils import prepare_batch, compute_disperion_prior
+from pydevil.utils import prepare_batch, compute_disperion_prior, init_beta
+from pydevil.utils_hessian import compute_hessians
 
 from sklearn.metrics.pairwise import rbf_kernel
 
@@ -32,14 +34,12 @@ def run_SVDE(
     full_cov = True, 
     prior_loc = 10,
     theta_bounds = (0., 1e16),
-    init_loc = 10,
-    threshold = 0,
+    init_loc = 10
 ):
-  
     if cuda and torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
-        torch.set_default_tensor_type(t=torch.FloatTensor)
+        torch.set_default_tensor_type(t=torch.torch.FloatTensor)
         
     if batch_size > input_matrix.shape[0]:
         batch_size = input_matrix.shape[0]
@@ -50,92 +50,104 @@ def run_SVDE(
         
     lrd = gamma_lr ** (1 / steps)
     
-    input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix).float(), torch.tensor(ncounts).float()
+    input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix, dtype = torch.float32), torch.tensor(ncounts, dtype = torch.float32)
+    beta_estimate_matrix = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
 
     if group_matrix is not None:
         group_matrix = torch.tensor(group_matrix).float()
 
     if gene_specific_model_tensor is not None:
-        gene_specific_model_tensor = torch.tensor(gene_specific_model_tensor).float()
+        gene_specific_model_tensor = torch.tensor(gene_specific_model_tensor, dtype = torch.float32)
   
     if optimizer_name == "SGD":
         optimizer = pyro.optim.SGD({"lr": lr})
     elif optimizer_name == "Adam":
         optimizer = pyro.optim.Adam({"lr": lr})
+    elif optimizer_name == "OneCycleLR":
+        optimizer = pyro.optim.PyroOptim(myOneCycleLR, {'lr': lr, "lrd" : gamma_lr, "steps": steps})
     else:
         optimizer = pyro.optim.ClippedAdam({"lr": lr, "lrd" : lrd})
             
     elbo_list = [] 
+    beta_list = []
+    overdisp_list = []
 
     pyro.clear_param_store()
         
     svi = pyro.infer.SVI(model, guide, optimizer, pyro.infer.TraceGraph_ELBO())
 
     dispersion_priors, dispersion_var = compute_disperion_prior(X = input_matrix)
-    
-    if (threshold <= 0) :
-      t = trange(steps, desc='Bar desc', leave = True)
-      for _ in t:
-  
-          input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
-          gene_specific_model_tensor_batch, kernel_input_batch =  \
-          prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
-          gene_specific_model_tensor, kernel_input, batch_size = batch_size)
-  
-          loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors, dispersion_var, group_matrix_batch,
-          gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, 
-          prior_loc = prior_loc,
-          theta_bounds = theta_bounds,
-          init_loc = init_loc)       
-  
-          elbo_list.append(loss)
-          norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
-          t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
-          t.refresh()
-    else:
-        t = trange(steps, desc='Bar desc', leave = True)
-        k_windows = int(steps * .01)
-        previous_elbo = np.array([None for _ in range(k_windows)])
-        converged_iterations = 0
 
-        for i in t:
-            input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
-            gene_specific_model_tensor_batch, kernel_input_batch =  \
-            prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
-            gene_specific_model_tensor, kernel_input, batch_size = batch_size)
-    
-            loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, dispersion_priors, dispersion_var, group_matrix_batch,
-            gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, 
-            prior_loc = prior_loc,
-            theta_bounds = theta_bounds,
-            init_loc = init_loc)       
-    
-            elbo_list.append(loss)
-            norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
-            t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
-            t.refresh()
+    prev_overdisp = torch.zeros_like(dispersion_priors)
+    prev_beta = torch.zeros([model_matrix.shape[1], input_matrix.shape[1]])
 
-            previous_elbo[i % k_windows] = loss
-            if i >= k_windows:
-                moving_avg_elbo = np.mean(previous_elbo)
-                moving_sd_elbo = np.std(previous_elbo)
-                
-                if (moving_sd_elbo / moving_avg_elbo) <= threshold:
-                    converged_iterations += 1
-                else:
-                    converged_iterations = 0
+    t = trange(steps, desc='Bar desc', leave = True)
+    for _ in t:
 
-                if converged_iterations == k_windows:
-                    break
+        input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
+        gene_specific_model_tensor_batch, kernel_input_batch =  \
+        prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
+        gene_specific_model_tensor, kernel_input, batch_size = batch_size)
+
+        loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, beta_estimate_matrix, dispersion_priors, dispersion_var, group_matrix_batch,
+        gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, prior_loc = prior_loc, theta_bounds = theta_bounds, init_loc = init_loc)  
+
+        elbo_list.append(loss)
+        norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
+        t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
+        t.refresh()
+
+        curr_beta = pyro.param("beta_mean")
+        curr_overdisp = pyro.param("theta_p")
+
+        beta_list.append((100 * torch.mean(abs(curr_beta - prev_beta) / abs(prev_beta))).detach().cpu().numpy())
+        overdisp_list.append((100 * torch.mean(abs(curr_overdisp - prev_overdisp) / prev_overdisp)).detach().cpu().numpy())
+
+        prev_beta = torch.clone(curr_beta)
+        prev_overdisp = torch.clone(curr_overdisp)
     
-    n_features = model_matrix.shape[1]
+    # n_features = model_matrix.shape[1]
     coeff = pyro.param("beta_mean")
     overdispersion = pyro.param("theta_p")
 
-    if full_cov and n_features > 1:
-        loc = torch.bmm(pyro.param("beta_loc"),pyro.param("beta_loc").permute(0,2,1))
-    else:
-        loc = pyro.param("beta_loc")
+    # if full_cov and n_features > 1:
+    #    loc = torch.bmm(pyro.param("beta_loc"),pyro.param("beta_loc").permute(0,2,1))
+    #else:
+    #    loc = pyro.param("beta_loc")
+
+    # if full_cov and n_features > 1:
+    #     loc = torch.zeros(input_matrix.shape[1], n_features, n_features)
+    # else:
+    #     loc = torch.zeros(input_matrix.shape[1], n_features)
+
+    # t = trange(input_matrix.shape[1], desc='Bar desc', leave = True)
+    # for gene_idx in t:
+    #     beta = torch.tensor(coeff[:,gene_idx])
+    #     alpha = 1 / overdispersion[gene_idx]
+    #     obs = input_matrix[gene_idx,]
+    #     n_coefficients = model_matrix.shape[1]
+    #     H = torch.zeros([n_coefficients, n_coefficients])
+
+    #     for sample_idx in range(len(obs)):
+    #         yi = obs[sample_idx]
+    #         design_v = model_matrix[sample_idx,]
+    #         xij = torch.ger(design_v, design_v)
+    #         k = torch.exp(torch.dot(design_v, beta))
+    #         gamma_sq = (1 + alpha * k)**2
+            
+    #         H -= (yi * alpha + 1) * xij * k / gamma_sq
+        
+    #     solved_hessian = torch.inverse(-H)
+
+    #     if full_cov:
+    #         loc[gene_idx,:,:] = solved_hessian
+    #     else:
+    #         loc[gene_idx,:] = torch.diag(solved_hessian)
+
+    #     t.set_description('Variance estimation: {:.2f}  '.format(gene_idx / input_matrix.shape[1]))
+    #     t.refresh()
+
+    loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=overdispersion, full_cov=full_cov)
 
     eta = torch.exp(torch.matmul(model_matrix, coeff) + torch.unsqueeze(torch.log(UMI), 1) )
     lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
@@ -159,14 +171,25 @@ def run_SVDE(
     variance =  eta + eta**2 / overdispersion
     # variance =  eta + eta**2 * overdispersion
 
-    ret = {"loss" : elbo_list, "params" : {
-        "theta" : overdispersion,
-        "lk" : lk,
-        "beta" : coeff,
-        "eta" : eta,
-        "variance" : loc
-        }, "residuals" : (input_matrix - eta) / np.sqrt(variance),
-        "hyperparams" : {"gene_names" : gene_names, "cell_names" : cell_names ,"model_matrix" : model_matrix}     }
+    ret = {
+        "loss" : elbo_list, 
+        "beta_list" : beta_list,
+        "overdisp_list" : overdisp_list,
+        "params" : {
+            "theta" : overdispersion,
+            "lk" : lk,
+            "beta" : coeff,
+            "eta" : eta,
+            "variance" : loc
+        }, 
+        "residuals" : (input_matrix - eta) / np.sqrt(variance),
+        "hyperparams" : {
+            "gene_names" : gene_names, 
+            "cell_names" : cell_names ,
+            "model_matrix" : model_matrix,
+            "full_cov" : full_cov
+        }     
+    }
 
     if group_matrix is not None:
         n_random = group_matrix.shape[1]
@@ -184,7 +207,8 @@ def run_SVDE(
             ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").cpu().detach().numpy()
         else:
             ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").detach().numpy()
-        
+            
+            
     return ret
   
   

@@ -9,7 +9,7 @@ SVI_default_args <- function() {
     batch_size = 5120L,
     full_cov = TRUE,
     prior_loc = 10,
-    theta_bounds = c(0., 1e16),
+    theta_bounds = c(1e-9., 1e9),
     init_loc = 10,
     threshold = 0
   )

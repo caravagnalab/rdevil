@@ -144,9 +144,10 @@ def compute_disperion_prior(X):
 
     if all_zero_column.any():
         num_zero_columns = all_zero_column.sum().item()
-        print(f"{num_zero_columns} columns contain too many zeros to calculate a size factor. A rough estimate will be used.")
+        print(f"{num_zero_columns} columns contain too many zeros to calculate a size factor. The size factor will be fixed to 1.")
         sf = sf / torch.exp(torch.log(sf).mean())
-        sf[all_zero_column] = (torch.sum(X.float(),dim=1) / (torch.sum(X.float(),dim=1).mean(dim=0)))[all_zero_column]
+        # sf[all_zero_column] = (torch.sum(X.float(),dim=1) / (torch.sum(X.float(),dim=1).mean(dim=0)))[all_zero_column]
+        sf[all_zero_column] = 1
     else:
         sf = sf / torch.exp(torch.log(sf).mean())
         
@@ -165,7 +166,11 @@ def compute_disperion_prior(X):
     def trend(x, a0, a1):
         return a0 / x**(1/2) + a1
 
-    fit_params, _ = curve_fit(trend, x, y, check_finite=False, bounds=((0, 0), (1e16, 1e16)))
+    try:
+        fit_params, _ = curve_fit(trend, x, y, check_finite=False, bounds=((0, 0), (1e16, 1e16)))
+    except:
+        return 1 / dispersion_estimate, torch.tensor(.25)
+    
     fitted_a0 = fit_params[0]
     fitted_a1 = fit_params[1]
 

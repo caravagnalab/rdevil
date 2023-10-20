@@ -1,17 +1,12 @@
-import pandas as pd
-import numpy as np
 import torch
-
 import pyro 
 import pyro.distributions as dist
 from torch.distributions import constraints
 
-from pydevil.utils import init_beta, init_theta
-
-
 def guide(input_matrix, 
           model_matrix, 
           UMI, 
+          beta_estimate,
           dispersion_priors,
           dispersion_variance,
           group_matrix = None, 
@@ -27,7 +22,7 @@ def guide(input_matrix,
     n_genes = input_matrix.shape[1]
     n_features = model_matrix.shape[1]
     
-    beta_estimate = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
+    # beta_estimate = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
     # theta_estimate = init_theta(input_matrix * 1.)
     theta_estimate = dispersion_priors
     beta_mean = pyro.param("beta_mean", beta_estimate, constraint=constraints.real)
@@ -45,9 +40,9 @@ def guide(input_matrix,
     if full_cov:
         beta_loc = pyro.param("beta_loc", (torch.eye(n_features, n_features).repeat([n_genes,1,1]) * init_loc), constraint=constraints.lower_cholesky)
     else:
-        beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * init_loc, constraint=constraints.positive) 
+        beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * init_loc, constraint=constraints.positive)
     
-    theta_p = pyro.param("theta_p", theta_estimate, constraint=constraints.positive) 
+    theta_p = pyro.param("theta_p", theta_estimate, constraint=constraints.positive)
     
     with pyro.plate("genes", n_genes, dim = -1):
         # pyro.sample("theta", dist.LogNormal(dispersion_priors, dispersion_variance))
@@ -69,6 +64,5 @@ def guide(input_matrix,
             pyro.sample("beta", dist.Normal(beta_mean.t(), beta_loc).to_event(1))
 
 
-        
 def guide_mle(*args, **kargs):
   pass
