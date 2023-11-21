@@ -38,9 +38,9 @@ def run_SVDE(
     init_loc = 10
 ):
     if cuda and torch.cuda.is_available():
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        torch.set_default_tensor_type('torch.cuda.DoubleTensor')
     else:
-        torch.set_default_tensor_type(t=torch.torch.FloatTensor)
+        torch.set_default_tensor_type(t=torch.torch.DoubleTensor)
         
     if batch_size > input_matrix.shape[0]:
         batch_size = input_matrix.shape[0]
@@ -51,7 +51,7 @@ def run_SVDE(
         
     lrd = gamma_lr ** (1 / steps)
     
-    input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix, dtype = torch.float32), torch.tensor(ncounts, dtype = torch.float32)
+    input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix), torch.tensor(ncounts)
     beta_estimate_matrix = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
 
     if group_matrix is not None:
