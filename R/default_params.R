@@ -8,9 +8,9 @@ SVI_default_args <- function() {
     jit_compile = FALSE,
     batch_size = 5120L,
     full_cov = TRUE,
-    prior_loc = 10,
-    theta_bounds = c(1e-9, 1e9),
-    init_loc = 10,
+    gauss_loc = 5,
+    theta_bounds = c(0, 1e5),
+    disp_loc = .25,
     threshold = 0
   )
 }

@@ -7,7 +7,54 @@ from scipy.optimize import curve_fit
 def check_is_categorical(mat):
     return (torch.sum(mat == 0) + torch.sum(mat == 1)) == (mat.shape[0] * mat.shape[1])
 
-def init_beta(X, model_matrix, approx_type = "auto", nsamples = 10000):
+def init_beta(Y, model_matrix, offset_matrix = None, approx_type = "auto", nsamples = 10000):
+    if approx_type == "auto":
+        if check_is_categorical(model_matrix):
+            approx_type = "group_mean"
+        else:
+            approx_type = "batch_linear_regression"
+    if approx_type == "group_mean":
+        groups = torch.sum(model_matrix, axis = 1)
+        norm_Y = Y / torch.exp(offset_matrix)
+        unique_groups = torch.unique(groups)
+
+        log_col_means_list = []
+
+        for gr in unique_groups:
+            mask = (groups == gr).view(-1, 1)
+            col_means = torch.mean(norm_Y * mask, dim=0)
+            log_col_means_list.append(torch.log(col_means))
+
+        beta_init = torch.stack(log_col_means_list, dim=0)
+        beta_init[beta_init == torch.tensor(-float("Inf"))] = 1e-9
+
+    else:
+        if nsamples < model_matrix.shape[0]:
+            n_categorical = torch.where(torch.tensor([check_is_categorical(model_matrix[:,i].unsqueeze(1)) for i in range(model_matrix.shape[1])]))[0]
+            if n_categorical.shape[0] == 0:
+                indexes = np.random.randint(model_matrix.shape[0], size = nsamples)
+            else:
+                samples_per_cat = nsamples//n_categorical.shape[0]                
+                n_categorical = n_categorical.tolist()
+                indexes = []
+                for i in n_categorical:
+                    samples_i = samples_per_cat
+                    if samples_per_cat > (model_matrix[:,i] == 1).sum().item():
+                        samples_i = (model_matrix[:,i] == 1).sum().item()
+                    av_samples = np.array(np.random.choice(torch.where(model_matrix[:,i] == 1)[0].detach().numpy(),size = samples_i, replace=False))
+                    indexes.append(av_samples)
+                indexes = np.concatenate(indexes)
+            X_regression = Y[indexes,:]
+            model_matrix_sub = model_matrix[indexes,:]
+        else:
+            X_regression = Y
+            model_matrix_sub = model_matrix
+
+        beta_init =  torch.linalg.solve(model_matrix_sub.t() @ model_matrix_sub, model_matrix_sub.t() @ X_regression.double(),  left = True)
+    
+    return beta_init
+
+def init_beta_old(X, model_matrix, approx_type = "auto", nsamples = 10000):
     if approx_type == "auto":
         if check_is_categorical(model_matrix):
             approx_type = "group_mean"
@@ -46,8 +93,6 @@ def init_theta(X, min_t = 0.0001, max_t = 1e6):
     to_return = torch.clamp(torch.tensor(min_t), torch.tensor(max_t),to_return)
     to_return[torch.isnan(to_return)] = max_t
     return to_return.abs()
-
-
 
 def rename_for_volcano(df_markers):
     df_markers_new = df_markers.set_axis(["GENE", "EFFECTSIZE", "p_value", "P", "is_significant"], axis=1)
@@ -126,65 +171,116 @@ def check_convergence(curr_p, previous_p, perc):
     percentage_diff = torch.abs(curr_p - previous_p) / abs(curr_p)
     return torch.sum(percentage_diff <= perc) >= (.95 * percentage_diff.numel())
 
-def compute_disperion_prior(X):
-    # Compute logarithm of geometric means
-    log_geo_means = torch.log(X).mean(dim=0, keepdim=True)
+def compute_disperion_prior(X, offset_matrix):
+    def estimate_dispersions_by_moment(Y):
+        xim = 1 / torch.mean(torch.mean(torch.exp(offset_matrix), dim=1))
+        bv = torch.var(Y, dim=0)
+        bm = torch.mean(Y, dim=0)
+        return (bv - xim * bm) / (bm ** 2)
 
-    def calculate_sf(cnts):
-        log_cnts = torch.log(cnts)
-        valid_indices = torch.isfinite(log_geo_means) & (cnts > 0)
-        filtered_log_diff = (log_cnts - log_geo_means)[valid_indices]
-        return torch.exp(filtered_log_diff.median())
+    def estimate_dispersions_roughly(Y):
+        moments_disp = estimate_dispersions_by_moment(Y)
+        disp_rough = torch.where(torch.isnan(moments_disp) | (moments_disp < 0), torch.tensor(0.0), moments_disp)
+        return disp_rough
+    
+    return estimate_dispersions_roughly(X)
+    # # Compute logarithm of geometric means
+    # log_geo_means = torch.log(X).mean(dim=0, keepdim=True)
 
-    sf = torch.stack([calculate_sf(cnts) for cnts in X])
+    # def calculate_sf(cnts):
+    #     log_cnts = torch.log(cnts)
+    #     valid_indices = torch.isfinite(log_geo_means) & (cnts > 0)
+    #     filtered_log_diff = (log_cnts - log_geo_means)[valid_indices]
+    #     return torch.exp(filtered_log_diff.median())
 
-    # Handle all-zero columns
-    all_zero_column = torch.isnan(sf) | (sf <= 0)
-    sf[all_zero_column] = float("nan")
+    # sf = torch.stack([calculate_sf(cnts) for cnts in X])
 
-    if all_zero_column.any():
-        num_zero_columns = all_zero_column.sum().item()
-        print(f"{num_zero_columns} columns contain too many zeros to calculate a size factor. The size factor will be fixed to 1.")
-        sf = sf / torch.exp(torch.log(sf).mean())
-        # sf[all_zero_column] = (torch.sum(X.float(),dim=1) / (torch.sum(X.float(),dim=1).mean(dim=0)))[all_zero_column]
-        sf[all_zero_column] = 1
-    else:
-        sf = sf / torch.exp(torch.log(sf).mean())
+    # # Handle all-zero columns
+    # all_zero_column = torch.isnan(sf) | (sf <= 0)
+    # sf[all_zero_column] = float("nan")
+
+    # if all_zero_column.any():
+    #     num_zero_columns = all_zero_column.sum().item()
+    #     print(f"{num_zero_columns} columns contain too many zeros to calculate a size factor. The size factor will be fixed to .0001.")
+    #     sf = sf / torch.exp(torch.log(sf).mean())
+    #     # sf[all_zero_column] = (torch.sum(X.float(),dim=1) / (torch.sum(X.float(),dim=1).mean(dim=0)))[all_zero_column]
+    #     sf[all_zero_column] = 1000
+    # else:
+    #     sf = sf / torch.exp(torch.log(sf).mean())
         
-    # Compute rough dispersion
-    xim = 1 / sf.mean()
-    bv = X.float().var(dim=0)
-    bm = X.float().mean(dim=0)
-    dispersion_estimate = (bv - xim * bm) / bm.pow(2)
+    # # Compute rough dispersion
+    # xim = 1 / sf.mean()
+    # bv = X.float().var(dim=0)
+    # bm = X.float().mean(dim=0)
+    # dispersion_estimate = (bv - xim * bm) / bm.pow(2)
 
-    # Compute mean gene expression
-    mean_gene_expression = (X / sf[:, None]).mean(dim=0)
+    # # Compute mean gene expression
+    # mean_gene_expression = (X / sf[:, None]).mean(dim=0)
 
-    # Fit non-linear least squares regression
-    x = mean_gene_expression.cpu().detach().numpy()
-    y = dispersion_estimate.cpu().detach().numpy()
-    def trend(x, a0, a1):
-        return a0 / x**(1/2) + a1
+    # # Fit non-linear least squares regression
+    # x = mean_gene_expression.cpu().detach().numpy()
+    # y = dispersion_estimate.cpu().detach().numpy()
+    # def trend(x, a0, a1):
+    #     return a0 / x**(1/2) + a1
 
-    try:
-        fit_params, _ = curve_fit(trend, x, y, check_finite=False, bounds=((0, 0), (1e16, 1e16)))
-    except:
-        return 1 / dispersion_estimate, torch.tensor(.25)
+    # try:
+    #     fit_params, _ = curve_fit(trend, x, y, check_finite=False, bounds=((0, 0), (1e16, 1e16)))
+    # except:
+    #     return 1 / dispersion_estimate, torch.tensor(.25)
     
-    fitted_a0 = fit_params[0]
-    fitted_a1 = fit_params[1]
+    # fitted_a0 = fit_params[0]
+    # fitted_a1 = fit_params[1]
 
-    # Estimate variance
-    dispersion_priors = torch.tensor(trend(mean_gene_expression.cpu().detach().numpy(), fitted_a0, fitted_a1))
+    # # Estimate variance
+    # dispersion_priors = torch.tensor(trend(mean_gene_expression.cpu().detach().numpy(), fitted_a0, fitted_a1))
 
-    # Calculate dispersion residuals
-    dispersion_residual = torch.log(dispersion_estimate) - torch.log(dispersion_priors)
+    # # Calculate dispersion residuals
+    # dispersion_residual = torch.log(dispersion_estimate) - torch.log(dispersion_priors)
 
-    # Calculate var_log_disp_est and exp_var_log_disp
-    var_log_disp_est = torch.median(torch.abs(dispersion_residual - torch.median(dispersion_residual))) * 1.4826
-    #exp_var_log_disp = trigamma((m - p) / 2)
-    if torch.isnan(var_log_disp_est): return dispersion_priors, torch.tensor(0.25)
+    # # Calculate var_log_disp_est and exp_var_log_disp
+    # var_log_disp_est = torch.median(torch.abs(dispersion_residual - torch.median(dispersion_residual))) * 1.4826
+    # #exp_var_log_disp = trigamma((m - p) / 2)
+    # if torch.isnan(var_log_disp_est): return dispersion_priors, torch.tensor(0.25)
     
-    dispersion_var = torch.max(var_log_disp_est, torch.tensor(0.25))
+    # dispersion_var = torch.max(var_log_disp_est, torch.tensor(0.25))
 
     return 1 / dispersion_priors, dispersion_var
+
+def estimate_size_factors(X, verbose = False):
+    if X.shape[1] <= 1:
+        if verbose:
+            print("Skipping size factor estimation! Only one gene is present!")
+        return torch.ones(X.shape[0])
+
+    sf = torch.sum(X, dim=1)
+
+    # Check for all-zero columns
+    all_zero_column = torch.isnan(sf) | (sf <= 0)
+
+    # Replace all-zero columns with NA
+    sf[all_zero_column] = 0
+
+    if any(all_zero_column):
+        warning_message = f"{torch.sum(all_zero_column)} columns contain too many zeros to calculate a size factor. The size factor will be fixed to 0.001"
+        print(warning_message)
+        
+        # Apply the required transformations
+        sf = sf / torch.exp(torch.mean(torch.log(sf[~all_zero_column]), dim=0, keepdim=True))
+        sf[all_zero_column] = 0.001
+    else:
+        sf = sf / torch.exp(torch.mean(torch.log(sf), dim=0, keepdim=True))
+
+    return sf
+
+def compute_offset_matrix(Y, size_factors):
+    n_samples, n_genes = Y.shape
+    
+    # Create the offset matrix
+    offset_matrix = torch.tensor(0.0).expand((n_samples, n_genes))
+    lsf = torch.log(size_factors)
+    
+    # Update the offset_matrix with size_factors
+    offset_matrix = offset_matrix + lsf.view(-1,1)
+
+    # Return the result
+    return offset_matrix

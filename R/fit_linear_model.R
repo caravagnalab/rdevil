@@ -57,7 +57,6 @@
 fit_linear_model <- function(
     input_matrix,
     model_matrix,
-    ncounts,
     group_matrix = NULL,
     gene_specific_model_tensor = NULL,
     kernel_input = NULL,
@@ -71,7 +70,6 @@ fit_linear_model <- function(
     fun = function(
         input_matrix,
         model_matrix,
-        ncounts,
         group_matrix,
         gene_specific_model_tensor,
         kernel_input,
@@ -86,7 +84,6 @@ fit_linear_model <- function(
 
         method_specific_args$input_matrix <- input_matrix
         method_specific_args$model_matrix <- model_matrix
-        method_specific_args$ncounts <- ncounts
         method_specific_args$group_matrix <- group_matrix
         method_specific_args$gene_specific_model_tensor <- gene_specific_model_tensor
         method_specific_args$kernel_input <- kernel_input
@@ -106,7 +103,6 @@ fit_linear_model <- function(
 
         method_specific_args$input_matrix <- input_matrix
         method_specific_args$model_matrix <- model_matrix
-        method_specific_args$ncounts <- ncounts
         method_specific_args$group_matrix <- group_matrix
         method_specific_args$gene_specific_model_tensor <- gene_specific_model_tensor
         method_specific_args$kernel_input <- kernel_input
@@ -126,14 +122,12 @@ fit_linear_model <- function(
 
       ret$run_params <- method_specific_args
       ret$input_params$model_matrix <- model_matrix
-      ret$input_params$ncounts <- ncounts
 
       class(ret) <- "rdevil"
       return(ret)
     },
     input_matrix = t(input_matrix),
     model_matrix = model_matrix,
-    ncounts = ncounts,
     group_matrix = group_matrix,
     gene_specific_model_tensor = gene_specific_model_tensor,
     kernel_input = kernel_input,

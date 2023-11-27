@@ -3,7 +3,7 @@ from tqdm import trange
 
 def compute_hessian(obs, model_matrix, coeff, overdispersion):
     beta = torch.tensor(coeff)
-    model_matrix = torch.tensor(model_matrix).float()
+    model_matrix = torch.tensor(model_matrix)
     alpha = 1 / overdispersion
     design_v = model_matrix.t()  # Transpose for vectorized operations
     yi = obs.unsqueeze(1)  # Add a new axis for broadcasting

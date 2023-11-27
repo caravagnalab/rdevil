@@ -11,7 +11,7 @@ from tqdm import trange
 from pydevil.model import model
 from pydevil.scheduler import myOneCycleLR
 from pydevil.guide import guide
-from pydevil.utils import prepare_batch, compute_disperion_prior, init_beta
+from pydevil.utils import prepare_batch, compute_disperion_prior, init_beta, compute_offset_matrix, estimate_size_factors
 from pydevil.utils_hessian import compute_hessians
 
 from sklearn.metrics.pairwise import rbf_kernel
@@ -19,7 +19,7 @@ from sklearn.metrics.pairwise import rbf_kernel
 def run_SVDE(
     input_matrix,
     model_matrix, 
-    ncounts, 
+    # ncounts, 
     group_matrix = None,
     gene_specific_model_tensor = None,
     kernel_input = None,
@@ -33,9 +33,10 @@ def run_SVDE(
     jit_compile = False,
     batch_size = 5120, 
     full_cov = True, 
-    prior_loc = 10,
+    gauss_loc = 5,
     theta_bounds = (0., 1e16),
-    init_loc = 10
+    disp_loc = .25,
+    threshold = 0
 ):
     if cuda and torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.DoubleTensor')
@@ -51,11 +52,15 @@ def run_SVDE(
         
     lrd = gamma_lr ** (1 / steps)
     
-    input_matrix, model_matrix, UMI = torch.tensor(input_matrix).int(), torch.tensor(model_matrix), torch.tensor(ncounts)
-    beta_estimate_matrix = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
+    input_matrix, model_matrix = torch.tensor(input_matrix).int(), torch.tensor(model_matrix)
+    sf = estimate_size_factors(input_matrix, verbose = True)
+    UMI = torch.tensor(sf).float()
+    offset_matrix = compute_offset_matrix(input_matrix, sf)
+    # beta_estimate_matrix = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
+    beta_estimate_matrix = init_beta(torch.tensor(input_matrix), model_matrix, offset_matrix)
 
     if group_matrix is not None:
-        group_matrix = torch.tensor(group_matrix).float()
+        group_matrix = torch.tensor(group_matrix)
 
     if gene_specific_model_tensor is not None:
         gene_specific_model_tensor = torch.tensor(gene_specific_model_tensor, dtype = torch.float32)
@@ -77,36 +82,30 @@ def run_SVDE(
         
     svi = pyro.infer.SVI(model, guide, optimizer, pyro.infer.TraceGraph_ELBO())
 
-    dispersion_priors, dispersion_var = compute_disperion_prior(X = input_matrix)
+    dispersion_priors = compute_disperion_prior(X = input_matrix.float(), offset_matrix = offset_matrix)
+    dispersion_priors[dispersion_priors == 0] = torch.min(dispersion_priors[dispersion_priors != float(0)])
 
-    prev_overdisp = torch.zeros_like(dispersion_priors)
-    prev_beta = torch.zeros([model_matrix.shape[1], input_matrix.shape[1]])
+    last_ten_loss = np.zeros(10)
 
     t = trange(steps, desc='Bar desc', leave = True)
-    for _ in t:
-
+    for it in t:
         input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
         gene_specific_model_tensor_batch, kernel_input_batch =  \
         prepare_batch(input_matrix, model_matrix, UMI, group_matrix,  \
         gene_specific_model_tensor, kernel_input, batch_size = batch_size)
 
-        loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, beta_estimate_matrix, dispersion_priors, dispersion_var, group_matrix_batch,
-        gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, prior_loc = prior_loc, theta_bounds = theta_bounds, init_loc = init_loc)  
+        loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, beta_estimate_matrix, dispersion_priors, group_matrix_batch,
+        gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, gauss_loc = gauss_loc, theta_bounds = theta_bounds, disp_loc = disp_loc)  
 
         elbo_list.append(loss)
         norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
         t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
         t.refresh()
 
-        curr_beta = pyro.param("beta_mean")
-        curr_overdisp = pyro.param("theta_p")
+        last_ten_loss[it % 10] = loss / norm_ind
+        if it > 10 and np.abs(np.mean(last_ten_loss) - last_ten_loss[it % 10]) < threshold:
+            break
 
-        beta_list.append((100 * torch.mean(abs(curr_beta - prev_beta) / abs(prev_beta))).detach().cpu().numpy())
-        overdisp_list.append((100 * torch.mean(abs(curr_overdisp - prev_overdisp) / prev_overdisp)).detach().cpu().numpy())
-
-        prev_beta = torch.clone(curr_beta)
-        prev_overdisp = torch.clone(curr_overdisp)
-    
     # n_features = model_matrix.shape[1]
     coeff = pyro.param("beta_mean")
     overdispersion = pyro.param("theta_p")
@@ -148,7 +147,7 @@ def run_SVDE(
     #     t.set_description('Variance estimation: {:.2f}  '.format(gene_idx / input_matrix.shape[1]))
     #     t.refresh()
 
-    loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=overdispersion, full_cov=full_cov)
+    loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, full_cov=full_cov)
 
     eta = torch.exp(torch.matmul(model_matrix, coeff) + torch.unsqueeze(torch.log(UMI), 1) )
     lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
@@ -174,8 +173,6 @@ def run_SVDE(
 
     ret = {
         "loss" : elbo_list, 
-        "beta_list" : beta_list,
-        "overdisp_list" : overdisp_list,
         "params" : {
             "theta" : overdispersion,
             "lk" : lk,

@@ -8,15 +8,14 @@ def guide(input_matrix,
           UMI, 
           beta_estimate,
           dispersion_priors,
-          dispersion_variance,
           group_matrix = None, 
           gene_specific_model_tensor = None,
           kernel_input = None,
           full_cov = True,
-          prior_loc = 10, 
+          gauss_loc = 10, 
           batch_size = 5120, 
           theta_bounds = (1e-6, 10000),
-          init_loc = 0.1):
+          disp_loc = 0.1):
   
     n_cells = input_matrix.shape[0]
     n_genes = input_matrix.shape[1]
@@ -33,19 +32,18 @@ def guide(input_matrix,
     if group_matrix is not None:
         n_groups = group_matrix.shape[1]
         if full_cov:
-            zeta_loc = pyro.param("zeta_loc", (torch.eye(n_groups, n_groups).repeat([n_genes,1,1]) * init_loc), constraint=constraints.lower_cholesky)
+            zeta_loc = pyro.param("zeta_loc", (torch.eye(n_groups, n_groups).repeat([n_genes,1,1]) * gauss_loc), constraint=constraints.lower_cholesky)
         else:
-            zeta_loc = pyro.param("zeta_loc", torch.ones(n_genes, n_groups) * init_loc, constraint=constraints.positive) 
+            zeta_loc = pyro.param("zeta_loc", torch.ones(n_genes, n_groups) * gauss_loc, constraint=constraints.positive) 
                
     if full_cov:
-        beta_loc = pyro.param("beta_loc", (torch.eye(n_features, n_features).repeat([n_genes,1,1]) * init_loc), constraint=constraints.lower_cholesky)
+        beta_loc = pyro.param("beta_loc", (torch.eye(n_features, n_features).repeat([n_genes,1,1]) * gauss_loc), constraint=constraints.lower_cholesky)
     else:
-        beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * init_loc, constraint=constraints.positive)
+        beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * gauss_loc, constraint=constraints.positive)
     
     theta_p = pyro.param("theta_p", theta_estimate, constraint=constraints.positive)
     
     with pyro.plate("genes", n_genes, dim = -1):
-        # pyro.sample("theta", dist.LogNormal(dispersion_priors, dispersion_variance))
         pyro.sample("theta", dist.Delta(theta_p))
         
         if kernel_input is not None:
