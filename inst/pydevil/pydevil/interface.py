@@ -25,6 +25,7 @@ def run_SVDE(
     kernel_input = None,
     gene_names = None,
     cell_names = None,
+    variance = "VI_Estimate",
     optimizer_name = "ClippedAdam",
     steps = 500, 
     lr = 0.5,
@@ -35,13 +36,17 @@ def run_SVDE(
     full_cov = True, 
     gauss_loc = 5,
     theta_bounds = (0., 1e16),
-    disp_loc = .25,
-    threshold = 0
+    disp_loc = .25
 ):
+    torch.set_default_dtype(torch.float64)
     if cuda and torch.cuda.is_available():
-        torch.set_default_tensor_type('torch.cuda.DoubleTensor')
+        #torch.set_default_tensor_type('torch.cuda.DoubleTensor')
+        torch.set_default_device("cuda:0")
     else:
-        torch.set_default_tensor_type(t=torch.torch.DoubleTensor)
+        torch.set_default_device("cpu")
+
+    if variance != "VI_Estimate" and variance != "Hessian":
+        raise ValueError("Variance should be either 'VI_Estimate' or 'Hessian'")
         
     if batch_size > input_matrix.shape[0]:
         batch_size = input_matrix.shape[0]
@@ -51,7 +56,7 @@ def run_SVDE(
         kernel_input = torch.tensor(kernel_input).float()
         
     lrd = gamma_lr ** (1 / steps)
-    
+
     input_matrix, model_matrix = torch.tensor(input_matrix).int(), torch.tensor(model_matrix)
     sf = estimate_size_factors(input_matrix, verbose = True)
     UMI = torch.tensor(sf).float()
@@ -85,8 +90,6 @@ def run_SVDE(
     dispersion_priors = compute_disperion_prior(X = input_matrix.float(), offset_matrix = offset_matrix)
     dispersion_priors[dispersion_priors == 0] = torch.min(dispersion_priors[dispersion_priors != float(0)])
 
-    last_ten_loss = np.zeros(10)
-
     t = trange(steps, desc='Bar desc', leave = True)
     for it in t:
         input_matrix_batch, model_matrix_batch, UMI_batch, group_matrix_batch, \
@@ -102,11 +105,7 @@ def run_SVDE(
         t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
         t.refresh()
 
-        last_ten_loss[it % 10] = loss / norm_ind
-        if it > 10 and np.abs(np.mean(last_ten_loss) - last_ten_loss[it % 10]) < threshold:
-            break
-
-    # n_features = model_matrix.shape[1]
+    
     coeff = pyro.param("beta_mean")
     overdispersion = pyro.param("theta_p")
 
@@ -120,34 +119,14 @@ def run_SVDE(
     # else:
     #     loc = torch.zeros(input_matrix.shape[1], n_features)
 
-    # t = trange(input_matrix.shape[1], desc='Bar desc', leave = True)
-    # for gene_idx in t:
-    #     beta = torch.tensor(coeff[:,gene_idx])
-    #     alpha = 1 / overdispersion[gene_idx]
-    #     obs = input_matrix[gene_idx,]
-    #     n_coefficients = model_matrix.shape[1]
-    #     H = torch.zeros([n_coefficients, n_coefficients])
-
-    #     for sample_idx in range(len(obs)):
-    #         yi = obs[sample_idx]
-    #         design_v = model_matrix[sample_idx,]
-    #         xij = torch.ger(design_v, design_v)
-    #         k = torch.exp(torch.dot(design_v, beta))
-    #         gamma_sq = (1 + alpha * k)**2
-            
-    #         H -= (yi * alpha + 1) * xij * k / gamma_sq
-        
-    #     solved_hessian = torch.inverse(-H)
-
-    #     if full_cov:
-    #         loc[gene_idx,:,:] = solved_hessian
-    #     else:
-    #         loc[gene_idx,:] = torch.diag(solved_hessian)
-
-    #     t.set_description('Variance estimation: {:.2f}  '.format(gene_idx / input_matrix.shape[1]))
-    #     t.refresh()
-
-    loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, full_cov=full_cov)
+    if variance == "VI_Estimate":
+        n_features = model_matrix.shape[1]
+        if full_cov and n_features > 1:
+            loc = torch.bmm(pyro.param("beta_loc"),pyro.param("beta_loc").permute(0,2,1))
+        else:
+            loc = pyro.param("beta_loc")
+    else:
+        loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, full_cov=full_cov)
 
     eta = torch.exp(torch.matmul(model_matrix, coeff) + torch.unsqueeze(torch.log(UMI), 1) )
     lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,

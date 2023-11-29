@@ -14,14 +14,14 @@ def init_beta(Y, model_matrix, offset_matrix = None, approx_type = "auto", nsamp
         else:
             approx_type = "batch_linear_regression"
     if approx_type == "group_mean":
-        groups = torch.sum(model_matrix, axis = 1)
+        # groups = torch.sum(model_matrix, axis = 1)
+        ncol = model_matrix.shape[1]
         norm_Y = Y / torch.exp(offset_matrix)
-        unique_groups = torch.unique(groups)
+        # unique_groups = torch.unique(groups)
 
         log_col_means_list = []
-
-        for gr in unique_groups:
-            mask = (groups == gr).view(-1, 1)
+        for i in range(ncol):
+            mask = (model_matrix[:,i] == 1).view(-1, 1)
             col_means = torch.mean(norm_Y * mask, dim=0)
             log_col_means_list.append(torch.log(col_means))
 

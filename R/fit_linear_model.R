@@ -62,8 +62,10 @@ fit_linear_model <- function(
     kernel_input = NULL,
     gene_names = NULL,
     cell_names = NULL,
+    variance = "VI_Estimate",
     inference_method = "SVI",
     method_specific_args = list()) {
+
   proc <- basilisk::basiliskStart(pydevil)
 
   ret <- basilisk::basiliskRun(proc,
@@ -75,6 +77,7 @@ fit_linear_model <- function(
         kernel_input,
         gene_names,
         cell_names,
+        variance,
         inference_method,
         method_specific_args) {
       py <- reticulate::import("pydevil")
@@ -89,6 +92,7 @@ fit_linear_model <- function(
         method_specific_args$kernel_input <- kernel_input
         method_specific_args$gene_names <- gene_names
         method_specific_args$cell_names <- cell_names
+        method_specific_args$variance <- variance
 
         ret <- do.call(py$run_SVDE, method_specific_args)
 
@@ -133,6 +137,7 @@ fit_linear_model <- function(
     kernel_input = kernel_input,
     gene_names = gene_names,
     cell_names = cell_names,
+    variance = variance,
     inference_method = inference_method,
     method_specific_args = method_specific_args
   )

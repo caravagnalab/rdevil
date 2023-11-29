@@ -41,9 +41,9 @@ def model(input_matrix,
       n_groups = group_matrix.shape[1]
   ### This is one possible implementation as a hierarchical model ###
       if full_cov:
-        zeta = pyro.sample("zeta", dist.MultivariateNormal(torch.zeros(n_genes, n_groups), scale_tril=torch.eye(n_groups, n_groups) * gauss_loc, validate_args=False))
+        zeta = pyro.sample("zeta", dist.MultivariateNormal(torch.zeros(n_genes, n_groups), scale_tril=torch.eye(n_groups, n_groups) * gauss_loc / 10, validate_args=False))
       else:
-        zeta = pyro.sample("zeta", dist.Normal(torch.zeros(n_genes, n_groups), torch.ones(n_groups) * gauss_loc).to_event(1))
+        zeta = pyro.sample("zeta", dist.Normal(torch.zeros(n_genes, n_groups), torch.ones(n_groups) * gauss_loc / 10).to_event(1))
         
     if gene_specific_model_tensor is not None:
         n_features_gs = gene_specific_model_tensor.shape[1]

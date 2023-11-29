@@ -10,8 +10,7 @@ SVI_default_args <- function() {
     full_cov = TRUE,
     gauss_loc = 5,
     theta_bounds = c(0, 1e5),
-    disp_loc = .25,
-    threshold = 0
+    disp_loc = .25
   )
 }
 
