@@ -35,15 +35,14 @@ def guide(input_matrix,
             zeta_loc = pyro.param("zeta_loc", (torch.eye(n_groups, n_groups).repeat([n_genes,1,1]) * gauss_loc / 10), constraint=constraints.lower_cholesky)
         else:
             zeta_loc = pyro.param("zeta_loc", torch.ones(n_genes, n_groups) * gauss_loc / 10, constraint=constraints.positive) 
-               
-    if full_cov:
-        beta_loc = pyro.param("beta_loc", (torch.eye(n_features, n_features).repeat([n_genes,1,1]) * gauss_loc), constraint=constraints.lower_cholesky)
-    else:
-        beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * gauss_loc, constraint=constraints.positive)
-    
-    theta_p = pyro.param("theta_p", theta_estimate, constraint=constraints.positive)
     
     with pyro.plate("genes", n_genes, dim = -1):
+        if full_cov:
+            beta_loc = pyro.param("beta_loc", (torch.eye(n_features, n_features).repeat([n_genes,1,1]) * gauss_loc), constraint=constraints.lower_cholesky)
+        else:
+            beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * gauss_loc, constraint=constraints.positive)
+    
+        theta_p = pyro.param("theta_p", theta_estimate, constraint=constraints.positive)
         pyro.sample("theta", dist.Delta(theta_p))
         
         if kernel_input is not None:
