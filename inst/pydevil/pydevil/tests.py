@@ -34,12 +34,13 @@ def test_posterior_null(inference_res,contrast, alpha = 0.05):
 
     # p_value = 2 * (1 - norm.cdf(np.abs(mu_test), scale = np.sqrt(total_variance)))
     p_value = 1 - dist.Chi2(1).cdf(mu_test**2 / total_variance)
+    p_value = p_value.cpu().detach().numpy()
 
     is_significant, p_value_adj = fdrcorrection(p_value, alpha=alpha)
 
     ret_df = pd.DataFrame.from_dict({
          "gene" : inference_res["hyperparams"]["gene_names"],
-         "log_FC" : mu_test,
+         "log_FC" : mu_test.cpu().detach().numpy(),
          "p_value" : p_value, 
          "p_value_adj" : p_value_adj, 
          "is_significant" : is_significant })
