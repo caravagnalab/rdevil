@@ -19,7 +19,7 @@ from sklearn.metrics.pairwise import rbf_kernel
 def run_SVDE(
     input_matrix,
     model_matrix, 
-    # ncounts, 
+    size_factors = True,
     group_matrix = None,
     gene_specific_model_tensor = None,
     kernel_input = None,
@@ -58,8 +58,12 @@ def run_SVDE(
     lrd = gamma_lr ** (1 / steps)
 
     input_matrix, model_matrix = torch.tensor(input_matrix).int(), torch.tensor(model_matrix)
-    sf = estimate_size_factors(input_matrix, verbose = True)
-    UMI = torch.tensor(sf).float()
+    if size_factors:
+        sf = estimate_size_factors(input_matrix, verbose = True)
+        UMI = torch.tensor(sf).float()
+    else:
+        sf = UMI = torch.ones(input_matrix.shape[0])
+
     offset_matrix = compute_offset_matrix(input_matrix, sf)
     # beta_estimate_matrix = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
     beta_estimate_matrix = init_beta(torch.tensor(input_matrix), model_matrix, offset_matrix)
@@ -88,7 +92,7 @@ def run_SVDE(
     svi = pyro.infer.SVI(model, guide, optimizer, pyro.infer.TraceGraph_ELBO())
 
     dispersion_priors = compute_disperion_prior(X = input_matrix.float(), offset_matrix = offset_matrix)
-    dispersion_priors[dispersion_priors == 0] = torch.min(dispersion_priors[dispersion_priors != float(0)])
+    dispersion_priors[dispersion_priors == 0] = min(dispersion_priors[dispersion_priors > 0])
 
     t = trange(steps, desc='Bar desc', leave = True)
     for it in t:
@@ -104,9 +108,8 @@ def run_SVDE(
         norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
         t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
         t.refresh()
-
-    
-    coeff = pyro.param("beta_mean")
+        
+    coeff = pyro.param("beta_mean").T
     overdispersion = pyro.param("theta_p")
 
     # if full_cov and n_features > 1:
@@ -168,22 +171,28 @@ def run_SVDE(
         }     
     }
 
+    # if group_matrix is not None:
+    #     ret['params']['random_effects'] = pyro.param("random_effects_loc").cpu().detach().numpy()
+
     if group_matrix is not None:
-        n_random = group_matrix.shape[1]
-        if full_cov and n_random > 1:
-            ret["params"]["random_effects_variance"] = torch.bmm(pyro.param("zeta_loc"),pyro.param("zeta_loc").permute(0,2,1))
-        else:
-            ret["params"]["random_effects_variance"] = pyro.param("zeta_loc")
-        if cuda and torch.cuda.is_available():
-            ret["params"]["random_effects_variance"] = ret["params"]["random_effects_variance"].cpu().detach().numpy()
-        else:
-            ret["params"]["random_effects_variance"] = ret["params"]["random_effects_variance"].detach().numpy()
+        ret['params']['random_effects'] = pyro.param("zeta_loc").cpu().detach().numpy()
+
+    # if group_matrix is not None:
+    #     n_random = group_matrix.shape[1]
+    #     if full_cov and n_random > 1:
+    #         ret["params"]["random_effects_variance"] = torch.bmm(pyro.param("zeta_loc"),pyro.param("zeta_loc").permute(0,2,1))
+    #     else:
+    #         ret["params"]["random_effects_variance"] = pyro.param("zeta_loc")
+    #     if cuda and torch.cuda.is_available():
+    #         ret["params"]["random_effects_variance"] = ret["params"]["random_effects_variance"].cpu().detach().numpy()
+    #     else:
+    #         ret["params"]["random_effects_variance"] = ret["params"]["random_effects_variance"].detach().numpy()
             
-    if kernel_input is not None:
-        if cuda and torch.cuda.is_available():
-            ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").cpu().detach().numpy()
-        else:
-            ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").detach().numpy()
+    # if kernel_input is not None:
+    #     if cuda and torch.cuda.is_available():
+    #         ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").cpu().detach().numpy()
+    #     else:
+    #         ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").detach().numpy()
 
     if cuda and torch.cuda.is_available():
         del elbo_list, beta_list, overdisp_list

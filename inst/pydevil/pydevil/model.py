@@ -15,6 +15,60 @@ def model(input_matrix,
           batch_size = 5120, 
           theta_bounds = (1e-9, 1000000),
           disp_loc = 0.1):
+    
+    n_cells = input_matrix.shape[0]
+    n_genes = input_matrix.shape[1]
+    n_features = model_matrix.shape[1]
+
+    # if group_matrix is not None:
+    #     n_groups = group_matrix.shape[1]
+    #     random_effects_loc = torch.zeros(n_groups)
+    #     random_effects_scale = torch.eye(n_groups, n_groups) * .05
+    #     random_effects = pyro.sample("random_effects", dist.MultivariateNormal(random_effects_loc, scale_tril=random_effects_scale))
+    
+    with pyro.plate("genes", n_genes, dim = -1): 
+      #theta = pyro.sample("theta", dist.LogNormal(torch.log(dispersion_priors), torch.ones(n_genes) * disp_loc))
+      theta = pyro.sample("theta", dist.Uniform(theta_bounds[0],theta_bounds[1]))
+      # beta_prior_mu = beta_estimate.t()
+      beta_prior_mu = torch.zeros(n_features)
+
+      if full_cov:
+        beta = pyro.sample("beta", dist.MultivariateNormal(beta_prior_mu, scale_tril=torch.eye(n_features, n_features) * gauss_loc, validate_args=False))
+      else:
+        beta = pyro.sample("beta", dist.Normal(beta_prior_mu, torch.ones(n_features) * gauss_loc).to_event(1))
+
+      if group_matrix is not None:
+        n_groups = group_matrix.shape[1]
+        zeta = pyro.sample("zeta", dist.Normal(torch.zeros(n_genes, n_groups), torch.ones(n_groups) * gauss_loc / 100).to_event(1))
+
+      with pyro.plate("data", n_cells, dim = -2):
+        eta = torch.matmul(model_matrix, beta.T)  + torch.log(UMI).unsqueeze(1)
+        
+        # if group_matrix is not None:
+        #     eta_zeta = torch.matmul(group_matrix, random_effects)
+        #     eta = eta + eta_zeta.unsqueeze(1)
+
+        if group_matrix is not None:
+            eta_zeta = torch.matmul(group_matrix , zeta.T)
+            eta_zeta = eta_zeta - eta_zeta.mean(dim=0)
+            eta = eta + eta_zeta
+        
+        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta) , total_count=1/theta), obs = input_matrix)
+
+
+def model_old(input_matrix, 
+          model_matrix, 
+          UMI, 
+          beta_estimate,
+          dispersion_priors,
+          group_matrix = None, 
+          gene_specific_model_tensor = None,
+          kernel_input = None,
+          full_cov = True,
+          gauss_loc = 10, 
+          batch_size = 5120, 
+          theta_bounds = (1e-9, 1000000),
+          disp_loc = 0.1):
   
   n_cells = input_matrix.shape[0]
   n_genes = input_matrix.shape[1]

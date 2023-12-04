@@ -16,6 +16,56 @@ def guide(input_matrix,
           batch_size = 5120, 
           theta_bounds = (1e-6, 10000),
           disp_loc = 0.1):
+    
+    n_cells = input_matrix.shape[0]
+    n_genes = input_matrix.shape[1]
+    n_features = model_matrix.shape[1]
+
+    dispersion_priors = torch.ones(n_genes) * 1e-1
+    beta_estimate = torch.zeros(n_genes, n_features)
+    beta_mean = pyro.param("beta_mean", beta_estimate, constraint=constraints.real)
+
+    if group_matrix is not None:
+        n_groups = group_matrix.shape[1]
+        zeta_loc = pyro.param("zeta_loc", torch.ones(n_genes, n_groups) * gauss_loc / 10, constraint=constraints.positive)
+
+    if full_cov:
+        beta_loc = pyro.param("beta_loc", (torch.eye(n_features, n_features).repeat([n_genes,1,1]) * gauss_loc), constraint=constraints.lower_cholesky)
+    else:
+        beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * gauss_loc, constraint=constraints.positive)
+
+    theta_p = pyro.param("theta_p", dispersion_priors, constraint=constraints.positive)
+    with pyro.plate("genes", n_genes, dim=-1):    
+        pyro.sample("theta", dist.Delta(theta_p))
+        #theta_scale = pyro.param("theta_scale", torch.ones(n_genes) * disp_loc, constraint=dist.constraints.positive)
+        #pyro.sample("theta", dist.LogNormal(torch.log(theta_loc), theta_scale))
+        #theta = pyro.sample("theta", dist.Normal(theta_loc, theta_scale).to_event(1))
+
+        if group_matrix is not None:
+            pyro.sample("zeta", dist.Normal(torch.zeros(n_genes, n_groups), zeta_loc).to_event(1))
+
+        if full_cov:
+            pyro.sample("beta", dist.MultivariateNormal(beta_mean, scale_tril = beta_loc, validate_args=False))
+        else:
+            pyro.sample("beta", dist.Normal(beta_mean.t(), beta_loc).to_event(1))
+
+        # print("beta shape = ", beta.shape)
+        # print("theta shape = ", theta.shape)
+        # print("random shape = ", random_effects.shape)
+
+def old_guide(input_matrix, 
+          model_matrix, 
+          UMI, 
+          beta_estimate,
+          dispersion_priors,
+          group_matrix = None, 
+          gene_specific_model_tensor = None,
+          kernel_input = None,
+          full_cov = True,
+          gauss_loc = 10, 
+          batch_size = 5120, 
+          theta_bounds = (1e-6, 10000),
+          disp_loc = 0.1):
   
     n_cells = input_matrix.shape[0]
     n_genes = input_matrix.shape[1]

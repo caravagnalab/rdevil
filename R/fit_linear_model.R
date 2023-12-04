@@ -57,6 +57,7 @@
 fit_linear_model <- function(
     input_matrix,
     model_matrix,
+    size_factors = TRUE,
     group_matrix = NULL,
     gene_specific_model_tensor = NULL,
     kernel_input = NULL,
@@ -72,6 +73,7 @@ fit_linear_model <- function(
     fun = function(
         input_matrix,
         model_matrix,
+        size_factors,
         group_matrix,
         gene_specific_model_tensor,
         kernel_input,
@@ -87,6 +89,7 @@ fit_linear_model <- function(
 
         method_specific_args$input_matrix <- input_matrix
         method_specific_args$model_matrix <- model_matrix
+        method_specific_args$size_factors <- size_factors
         method_specific_args$group_matrix <- group_matrix
         method_specific_args$gene_specific_model_tensor <- gene_specific_model_tensor
         method_specific_args$kernel_input <- kernel_input
@@ -107,6 +110,7 @@ fit_linear_model <- function(
 
         method_specific_args$input_matrix <- input_matrix
         method_specific_args$model_matrix <- model_matrix
+        method_specific_args$size_factors <- size_factors
         method_specific_args$group_matrix <- group_matrix
         method_specific_args$gene_specific_model_tensor <- gene_specific_model_tensor
         method_specific_args$kernel_input <- kernel_input
@@ -132,6 +136,7 @@ fit_linear_model <- function(
     },
     input_matrix = t(input_matrix),
     model_matrix = model_matrix,
+    size_factors = size_factors,
     group_matrix = group_matrix,
     gene_specific_model_tensor = gene_specific_model_tensor,
     kernel_input = kernel_input,
