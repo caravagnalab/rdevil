@@ -12,11 +12,7 @@ from pydevil.model import model
 from pydevil.scheduler import myOneCycleLR
 from pydevil.guide import guide
 from pydevil.utils import prepare_batch, compute_disperion_prior, init_beta, compute_offset_matrix, estimate_size_factors
-<<<<<<< HEAD
-from pydevil.utils_hessian import compute_hessians
-=======
 from pydevil.utils_hessian import compute_hessians, compute_sandwiches
->>>>>>> f622db1 (m)
 
 from sklearn.metrics.pairwise import rbf_kernel
 
@@ -49,8 +45,8 @@ def run_SVDE(
     else:
         torch.set_default_device("cpu")
 
-    if variance != "VI_Estimate" and variance != "Hessian":
-        raise ValueError("Variance should be either 'VI_Estimate' or 'Hessian'")
+    if variance not in ["VI_Estimate", "Hessian", "Sandwich"]:
+        raise ValueError("Variance should be either 'VI_Estimate' or 'Hessian' or 'Sandwich'")
         
     if batch_size > input_matrix.shape[0]:
         batch_size = input_matrix.shape[0]
@@ -132,13 +128,10 @@ def run_SVDE(
             loc = torch.bmm(pyro.param("beta_loc"),pyro.param("beta_loc").permute(0,2,1))
         else:
             loc = pyro.param("beta_loc")
-    else:
-<<<<<<< HEAD
+    elif variance == "Hessian":
         loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, full_cov=full_cov)
-=======
-        #loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, full_cov=full_cov)
+    else:
         loc = compute_sandwiches(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=overdispersion, size_factors=UMI, full_cov=full_cov)
->>>>>>> f622db1 (m)
 
     eta = torch.exp(torch.matmul(model_matrix, coeff) + torch.unsqueeze(torch.log(UMI), 1) )
     lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
@@ -151,10 +144,7 @@ def run_SVDE(
         coeff = coeff.cpu().detach().numpy()
         loc = loc.cpu().detach().numpy()
         lk = lk.cpu().detach().numpy()
-<<<<<<< HEAD
-=======
         UMI = UMI.cpu().detach().numpy()
->>>>>>> f622db1 (m)
     else:
         input_matrix = input_matrix.detach().numpy() 
         overdispersion = overdispersion.detach().numpy() 
@@ -162,10 +152,7 @@ def run_SVDE(
         coeff = coeff.detach().numpy()
         loc = loc.detach().numpy()
         lk = lk.detach().numpy()
-<<<<<<< HEAD
-=======
         UMI = UMI.detach().numpy()
->>>>>>> f622db1 (m)
 
     variance =  eta + eta**2 / overdispersion
     # variance =  eta + eta**2 * overdispersion
@@ -177,12 +164,8 @@ def run_SVDE(
             "lk" : lk,
             "beta" : coeff,
             "eta" : eta,
-<<<<<<< HEAD
-            "variance" : loc
-=======
             "variance" : loc,
             "size_factors" : UMI
->>>>>>> f622db1 (m)
         }, 
         "residuals" : (input_matrix - eta) / np.sqrt(variance),
         "hyperparams" : {
@@ -197,7 +180,11 @@ def run_SVDE(
     #     ret['params']['random_effects'] = pyro.param("random_effects_loc").cpu().detach().numpy()
 
     if group_matrix is not None:
-        ret['params']['random_effects'] = pyro.param("zeta_loc").cpu().detach().numpy()
+        ret['params']['subject_dispersion'] = pyro.param("s").cpu().detach().numpy()
+        ret['params']['random_effects'] = pyro.param("w").cpu().detach().numpy()
+        #ret['params']['alpha'] = pyro.param("alpha_p").cpu().detach().numpy()
+        #ret['params']['lambda'] = pyro.param("lambda_p").cpu().detach().numpy()
+        #ret['params']['random_effects'] = pyro.param("random_effects_p").cpu().detach().numpy()
 
     # if group_matrix is not None:
     #     n_random = group_matrix.shape[1]

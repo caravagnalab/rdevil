@@ -19,17 +19,9 @@ def model(input_matrix,
     n_cells = input_matrix.shape[0]
     n_genes = input_matrix.shape[1]
     n_features = model_matrix.shape[1]
-
-    # if group_matrix is not None:
-    #     n_groups = group_matrix.shape[1]
-    #     random_effects_loc = torch.zeros(n_groups)
-    #     random_effects_scale = torch.eye(n_groups, n_groups) * .05
-    #     random_effects = pyro.sample("random_effects", dist.MultivariateNormal(random_effects_loc, scale_tril=random_effects_scale))
     
     with pyro.plate("genes", n_genes, dim = -1): 
-      #theta = pyro.sample("theta", dist.LogNormal(torch.log(dispersion_priors), torch.ones(n_genes) * disp_loc))
       theta = pyro.sample("theta", dist.Uniform(theta_bounds[0],theta_bounds[1]))
-      # beta_prior_mu = beta_estimate.t()
       beta_prior_mu = torch.zeros(n_features)
 
       if full_cov:
@@ -39,21 +31,30 @@ def model(input_matrix,
 
       if group_matrix is not None:
         n_groups = group_matrix.shape[1]
-        zeta = pyro.sample("zeta", dist.Normal(torch.zeros(n_genes, n_groups), torch.ones(n_groups) * gauss_loc / 100).to_event(1))
+        #alpha_ = pyro.sample("alpha", dist.Exponential(1.0))
+        #lambda_ = pyro.sample("lambda", dist.Exponential(1.0))
+        sigma = pyro.sample("sigma", dist.Exponential(100.0))
+
+        alpha_ = 1 / (torch.exp(sigma) - 1)
+        lambda_ = 1 / ((torch.exp(sigma) - 1) * torch.exp(sigma / 2))
+        
+        with pyro.plate("groups", n_groups):
+          #random_effects = pyro.sample("random_effects", dist.Normal(0, sigma))
+          random_effects = pyro.sample("random_effects", dist.Gamma(alpha_, lambda_))
 
       with pyro.plate("data", n_cells, dim = -2):
         eta = torch.matmul(model_matrix, beta.T)  + torch.log(UMI).unsqueeze(1)
         
-        # if group_matrix is not None:
-        #     eta_zeta = torch.matmul(group_matrix, random_effects)
-        #     eta = eta + eta_zeta.unsqueeze(1)
-
         if group_matrix is not None:
-            eta_zeta = torch.matmul(group_matrix , zeta.T)
-            eta_zeta = eta_zeta - eta_zeta.mean(dim=0)
-            eta = eta + eta_zeta
-        
-        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta) , total_count=1/theta), obs = input_matrix)
+            w = torch.matmul(group_matrix, random_effects)
+
+            gamma = 1 / theta + sigma / theta + sigma
+            
+            eta = eta + torch.log(w)
+            pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1/theta) , total_count=1/theta), obs = input_matrix)
+
+        else:
+          pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta) , total_count=1/theta), obs = input_matrix)
 
 
 def model_old(input_matrix, 
@@ -132,3 +133,55 @@ def model_old(input_matrix,
         
         pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta) , total_count=1 / theta), obs = input_matrix)
     
+
+
+def my_custom_likelihood(counts, eta, alpha_, lambda_, theta, group_matrix, random_effects):
+    n_groups = group_matrix.shape[1]
+    L = torch.zeros(counts.shape[1])
+    for i in range(n_groups):
+        group_flag = group_matrix[:,i] == 1
+
+        yij = counts[group_flag,]
+        mu_ij = torch.exp(eta[group_flag,])
+        eta_ij = eta[group_flag,]
+        
+        yij_sum = torch.sum(yij, dim=0)
+        mu_ij_sum = torch.sum(mu_ij, dim=0)
+
+        wi = random_effects[i,]
+
+        term1 = alpha_ * torch.log(lambda_)
+        term2 = torch.lgamma(yij_sum + alpha_) / torch.lgamma(alpha_)
+        term3 = torch.sum(yij * eta_ij, dim=0)
+        term4 = - (yij_sum + alpha_) * torch.log(mu_ij_sum + lambda_)
+        term5 = torch.sum(theta * torch.log(theta) + torch.lgamma(yij_sum + theta) - torch.lgamma(theta) - (yij + theta) * torch.log(theta * wi) + wi * mu_ij, dim=0)
+
+        L += term1 + term2 + term3 + term4 + term5
+
+    return L
+
+
+def my_custom_likelihood_2(counts, eta, alpha_, lambda_, theta, group_matrix, random_effects):
+    n_groups = group_matrix.shape[1]
+    L = torch.zeros(counts.shape[1])
+    for i in range(n_groups):
+        group_flag = group_matrix[:,i] == 1
+
+        yij = counts[group_flag,]
+        mu_ij = torch.exp(eta[group_flag,])
+        eta_ij = eta[group_flag,]
+        
+        yij_sum = torch.sum(yij, dim=0)
+        mu_ij_sum = torch.sum(mu_ij, dim=0)
+
+        wi = random_effects[i,]
+
+        term1 = torch.lgamma(alpha_ + yij_sum)
+        term2 = torch.sum(torch.lgamma(yij+1).exp())
+        term3 = torch.sum(yij * eta_ij, dim=0)
+        term4 = (alpha_ + yij_sum) * torch.log(lambda_ + mu_ij_sum)
+        term5 = alpha_ * torch.log(lambda_)
+
+        L += term1 - term2 + term3 - term4 + term5
+
+    return L
