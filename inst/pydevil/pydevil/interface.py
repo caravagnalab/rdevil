@@ -129,7 +129,7 @@ def run_SVDE(
         else:
             loc = pyro.param("beta_loc")
     elif variance == "Hessian":
-        loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, full_cov=full_cov)
+        loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, size_factors=size_factors, full_cov=full_cov)
     else:
         loc = compute_sandwiches(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=overdispersion, size_factors=UMI, full_cov=full_cov)
 
