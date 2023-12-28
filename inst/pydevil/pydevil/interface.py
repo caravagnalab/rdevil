@@ -69,7 +69,10 @@ def run_SVDE(
     beta_estimate_matrix = init_beta(torch.tensor(input_matrix), model_matrix, offset_matrix)
 
     if group_matrix is not None:
-        group_matrix = torch.tensor(group_matrix)
+        clusters = torch.tensor(group_matrix)
+        group_matrix = None
+    else:
+        clusters = None
 
     if gene_specific_model_tensor is not None:
         gene_specific_model_tensor = torch.tensor(gene_specific_model_tensor, dtype = torch.float32)
@@ -112,16 +115,6 @@ def run_SVDE(
     coeff = pyro.param("beta_mean").T
     overdispersion = pyro.param("theta_p")
 
-    # if full_cov and n_features > 1:
-    #    loc = torch.bmm(pyro.param("beta_loc"),pyro.param("beta_loc").permute(0,2,1))
-    #else:
-    #    loc = pyro.param("beta_loc")
-
-    # if full_cov and n_features > 1:
-    #     loc = torch.zeros(input_matrix.shape[1], n_features, n_features)
-    # else:
-    #     loc = torch.zeros(input_matrix.shape[1], n_features)
-
     if variance == "VI_Estimate":
         n_features = model_matrix.shape[1]
         if full_cov and n_features > 1:
@@ -129,9 +122,10 @@ def run_SVDE(
         else:
             loc = pyro.param("beta_loc")
     elif variance == "Hessian":
-        loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, size_factors=size_factors, full_cov=full_cov)
-    else:
-        loc = compute_sandwiches(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=overdispersion, size_factors=UMI, full_cov=full_cov)
+        if clusters is None:
+            loc = compute_hessians(input_matrix=input_matrix, model_matrix=model_matrix, coeff=coeff, overdispersion=1 / overdispersion, size_factors=UMI, full_cov=full_cov)
+        else:
+            loc = compute_sandwiches(input_matrix, model_matrix, coeff, overdispersion, UMI, clusters)
 
     eta = torch.exp(torch.matmul(model_matrix, coeff) + torch.unsqueeze(torch.log(UMI), 1) )
     lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
@@ -179,9 +173,9 @@ def run_SVDE(
     # if group_matrix is not None:
     #     ret['params']['random_effects'] = pyro.param("random_effects_loc").cpu().detach().numpy()
 
-    if group_matrix is not None:
-        ret['params']['subject_dispersion'] = pyro.param("s").cpu().detach().numpy()
-        ret['params']['random_effects'] = pyro.param("w").cpu().detach().numpy()
+    #if group_matrix is not None:
+        #ret['params']['subject_dispersion'] = pyro.param("s").cpu().detach().numpy()
+        #ret['params']['random_effects'] = pyro.param("w").cpu().detach().numpy()
         #ret['params']['alpha'] = pyro.param("alpha_p").cpu().detach().numpy()
         #ret['params']['lambda'] = pyro.param("lambda_p").cpu().detach().numpy()
         #ret['params']['random_effects'] = pyro.param("random_effects_p").cpu().detach().numpy()
