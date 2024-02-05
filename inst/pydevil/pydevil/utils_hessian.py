@@ -5,7 +5,7 @@ def compute_hessian(obs, model_matrix, coeff, overdispersion, size_factors):
     beta = torch.tensor(coeff)
     model_matrix = torch.tensor(model_matrix)
     alpha = 1 / overdispersion
-    design_v = model_matrix.t()  # Transpose for vectorized operations
+    design_v = model_matrix.t()  # Transpose for :qvectorized operations
     yi = obs.unsqueeze(1)  # Add a new axis for broadcasting
     k = size_factors * torch.exp(torch.matmul(design_v.t(), beta))
     gamma_sq = (1 + alpha * k) ** 2
@@ -24,20 +24,24 @@ def compute_hessians(input_matrix, model_matrix, coeff, overdispersion, size_fac
     t = trange(n_genes)
     for gene_idx in t:
         solved_hessian = compute_hessian(
-            obs=input_matrix[:,gene_idx], 
-            model_matrix=model_matrix, 
-            coeff=coeff[:,gene_idx], 
-            overdispersion=overdispersion[gene_idx], 
+            obs=input_matrix[:,gene_idx],
+            model_matrix=model_matrix,
+            coeff=coeff[:,gene_idx],
+            overdispersion=overdispersion[gene_idx],
             size_factors=size_factors
         )
+        #print("Cuda memory : ", torch.cuda.mem_get_info())
 
         t.set_description('Variance estimation: {:.2f}  '.format(gene_idx / n_genes))
         t.refresh()
+        if torch.cuda.is_available():
+            solved_hessian = solved_hessian.detach().cpu()
 
         if full_cov:
             loc[gene_idx, :, :] = solved_hessian
         else:
             loc[gene_idx, :] = torch.diag(solved_hessian)
+        del solved_hessian
 
     return loc
 

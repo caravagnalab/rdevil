@@ -38,34 +38,37 @@ def run_SVDE(
     theta_bounds = (0., 1e16),
     disp_loc = .25
 ):
+    print("Present global variables : ", globals().keys())
+    print("Cuda memory : ", torch.cuda.mem_get_info())
+    init_free_memory = torch.cuda.mem_get_info()[0]
+
     torch.set_default_dtype(torch.float64)
     if cuda and torch.cuda.is_available():
-        #torch.set_default_tensor_type('torch.cuda.DoubleTensor')
+        # torch.set_default_tensor_type('torch.cuda.DoubleTensor')
         torch.set_default_device("cuda:0")
     else:
         torch.set_default_device("cpu")
 
     if variance not in ["VI_Estimate", "Hessian", "Sandwich"]:
         raise ValueError("Variance should be either 'VI_Estimate' or 'Hessian' or 'Sandwich'")
-        
+
     if batch_size > input_matrix.shape[0]:
         batch_size = input_matrix.shape[0]
 
     if kernel_input is not None:
         kernel_input = rbf_kernel(kernel_input, gamma = 1.) + np.eye(kernel_input.shape[0]) * 0.1
         kernel_input = torch.tensor(kernel_input).float()
-        
+
     lrd = gamma_lr ** (1 / steps)
 
-    input_matrix, model_matrix = torch.tensor(input_matrix).int(), torch.tensor(model_matrix)
+    input_matrix, model_matrix = torch.tensor(input_matrix).int(), torch.tensor(model_matrix).double()
     if size_factors:
         sf = estimate_size_factors(input_matrix, verbose = True)
         UMI = torch.tensor(sf).float()
     else:
-        sf = UMI = torch.ones(input_matrix.shape[0])
+        sf = UMI = torch.tensor(torch.ones(input_matrix.shape[0]))
 
     offset_matrix = compute_offset_matrix(input_matrix, sf)
-    # beta_estimate_matrix = init_beta(torch.log((input_matrix + 1e-5) / UMI.unsqueeze(1)), model_matrix)
     beta_estimate_matrix = init_beta(torch.tensor(input_matrix), model_matrix, offset_matrix)
 
     if group_matrix is not None:
@@ -74,9 +77,6 @@ def run_SVDE(
     else:
         clusters = None
 
-    if gene_specific_model_tensor is not None:
-        gene_specific_model_tensor = torch.tensor(gene_specific_model_tensor, dtype = torch.float32)
-  
     if optimizer_name == "SGD":
         optimizer = pyro.optim.SGD({"lr": lr})
     elif optimizer_name == "Adam":
@@ -85,13 +85,11 @@ def run_SVDE(
         optimizer = pyro.optim.PyroOptim(myOneCycleLR, {'lr': lr, "lrd" : gamma_lr, "steps": steps})
     else:
         optimizer = pyro.optim.ClippedAdam({"lr": lr, "lrd" : lrd})
-            
-    elbo_list = [] 
-    beta_list = []
-    overdisp_list = []
+
+    elbo_list = []
 
     pyro.clear_param_store()
-        
+
     svi = pyro.infer.SVI(model, guide, optimizer, pyro.infer.TraceGraph_ELBO())
 
     dispersion_priors = compute_disperion_prior(X = input_matrix.float(), offset_matrix = offset_matrix)
@@ -105,13 +103,13 @@ def run_SVDE(
         gene_specific_model_tensor, kernel_input, batch_size = batch_size)
 
         loss = svi.step(input_matrix_batch, model_matrix_batch, UMI_batch, beta_estimate_matrix, dispersion_priors, group_matrix_batch,
-        gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, gauss_loc = gauss_loc, theta_bounds = theta_bounds, disp_loc = disp_loc)  
+        gene_specific_model_tensor_batch, kernel_input_batch, full_cov = full_cov, gauss_loc = gauss_loc, theta_bounds = theta_bounds, disp_loc = disp_loc)
 
         elbo_list.append(loss)
         norm_ind = input_matrix_batch.shape[0] * input_matrix_batch.shape[1]
         t.set_description('ELBO: {:.5f}  '.format(loss / norm_ind))
         t.refresh()
-        
+
     coeff = pyro.param("beta_mean").T
     overdispersion = pyro.param("theta_p")
 
@@ -128,81 +126,57 @@ def run_SVDE(
             loc = compute_sandwiches(input_matrix, model_matrix, coeff, overdispersion, UMI, clusters)
 
     eta = torch.exp(torch.matmul(model_matrix, coeff) + torch.unsqueeze(torch.log(UMI), 1) )
-    lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
-        total_count= torch.clamp(overdispersion, 1e-9,1e9)).log_prob(input_matrix).sum(dim = 0)
+    #variance =  eta + eta**2 / overdispersion
+    #lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
+    #    total_count= torch.clamp(overdispersion, 1e-9,1e9)).log_prob(input_matrix).sum(dim = 0)
 
-    if cuda and torch.cuda.is_available(): 
-        input_matrix = input_matrix.cpu().detach().numpy() 
-        overdispersion = overdispersion.cpu().detach().numpy() 
+    if cuda and torch.cuda.is_available():
+        input_matrix = input_matrix.cpu().detach().numpy()
+        model_matrix = model_matrix.cpu().detach().numpy()
+        overdispersion = overdispersion.cpu().detach().numpy()
         eta = eta.cpu().detach().numpy()
+        # variance = variance.cpu().detach().numpy()
         coeff = coeff.cpu().detach().numpy()
         loc = loc.cpu().detach().numpy()
-        lk = lk.cpu().detach().numpy()
+        # lk = lk.cpu().detach().numpy()
         UMI = UMI.cpu().detach().numpy()
     else:
-        input_matrix = input_matrix.detach().numpy() 
-        overdispersion = overdispersion.detach().numpy() 
+        input_matrix = input_matrix.detach().numpy()
+        model_matrix = model_matrix.detach().numpy()
+        overdispersion = overdispersion.detach().numpy()
         eta = eta.detach().numpy()
         coeff = coeff.detach().numpy()
+        #variance = variance.detach().numpy()
         loc = loc.detach().numpy()
-        lk = lk.detach().numpy()
+        # lk = lk.detach().numpy()
         UMI = UMI.detach().numpy()
 
-    variance =  eta + eta**2 / overdispersion
-    # variance =  eta + eta**2 * overdispersion
-
     ret = {
-        "loss" : elbo_list, 
+        "loss" : elbo_list,
         "params" : {
             "theta" : overdispersion,
-            "lk" : lk,
+            #"lk" : lk,
             "beta" : coeff,
             "eta" : eta,
             "variance" : loc,
             "size_factors" : UMI
-        }, 
-        "residuals" : (input_matrix - eta) / np.sqrt(variance),
+        },
+        #"residuals" : (input_matrix - eta) / np.sqrt(variance),
         "hyperparams" : {
-            "gene_names" : gene_names, 
+            "gene_names" : gene_names,
             "cell_names" : cell_names ,
             "model_matrix" : model_matrix,
             "full_cov" : full_cov
-        }     
+        }
     }
 
-    # if group_matrix is not None:
-    #     ret['params']['random_effects'] = pyro.param("random_effects_loc").cpu().detach().numpy()
-
-    #if group_matrix is not None:
-        #ret['params']['subject_dispersion'] = pyro.param("s").cpu().detach().numpy()
-        #ret['params']['random_effects'] = pyro.param("w").cpu().detach().numpy()
-        #ret['params']['alpha'] = pyro.param("alpha_p").cpu().detach().numpy()
-        #ret['params']['lambda'] = pyro.param("lambda_p").cpu().detach().numpy()
-        #ret['params']['random_effects'] = pyro.param("random_effects_p").cpu().detach().numpy()
-
-    # if group_matrix is not None:
-    #     n_random = group_matrix.shape[1]
-    #     if full_cov and n_random > 1:
-    #         ret["params"]["random_effects_variance"] = torch.bmm(pyro.param("zeta_loc"),pyro.param("zeta_loc").permute(0,2,1))
-    #     else:
-    #         ret["params"]["random_effects_variance"] = pyro.param("zeta_loc")
-    #     if cuda and torch.cuda.is_available():
-    #         ret["params"]["random_effects_variance"] = ret["params"]["random_effects_variance"].cpu().detach().numpy()
-    #     else:
-    #         ret["params"]["random_effects_variance"] = ret["params"]["random_effects_variance"].detach().numpy()
-            
-    # if kernel_input is not None:
-    #     if cuda and torch.cuda.is_available():
-    #         ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").cpu().detach().numpy()
-    #     else:
-    #         ret["params"]["lengthscale_kernel"] = pyro.param("lengthscale_param").detach().numpy()
-
     if cuda and torch.cuda.is_available():
-        del elbo_list, beta_list, overdisp_list
-        del overdispersion, lk, coeff, eta, loc, variance
+        del elbo_list, overdispersion, coeff, eta, loc, variance# , lk
         del input_matrix, model_matrix, group_matrix, beta_estimate_matrix, UMI, gene_specific_model_tensor, kernel_input
         del input_matrix_batch, model_matrix_batch, group_matrix_batch, UMI_batch, gene_specific_model_tensor_batch, kernel_input_batch
-        del loss
+        del loss, svi
+        del offset_matrix, dispersion_priors, sf
+
         torch.cuda.empty_cache()
         gc.collect()
 
