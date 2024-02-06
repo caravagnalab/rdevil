@@ -29,32 +29,32 @@ def model(input_matrix,
       else:
         beta = pyro.sample("beta", dist.Normal(beta_prior_mu, torch.ones(n_features) * gauss_loc).to_event(1))
 
-      if group_matrix is not None:
-        n_groups = group_matrix.shape[1]
-        #alpha_ = pyro.sample("alpha", dist.Exponential(1.0))
-        #lambda_ = pyro.sample("lambda", dist.Exponential(1.0))
-        sigma = pyro.sample("sigma", dist.Exponential(100.0))
+      # if group_matrix is not None:
+      #   n_groups = group_matrix.shape[1]
+      #   #alpha_ = pyro.sample("alpha", dist.Exponential(1.0))
+      #   #lambda_ = pyro.sample("lambda", dist.Exponential(1.0))
+      #   sigma = pyro.sample("sigma", dist.Exponential(100.0))
 
-        alpha_ = 1 / (torch.exp(sigma) - 1)
-        lambda_ = 1 / ((torch.exp(sigma) - 1) * torch.exp(sigma / 2))
+      #   alpha_ = 1 / (torch.exp(sigma) - 1)
+      #   lambda_ = 1 / ((torch.exp(sigma) - 1) * torch.exp(sigma / 2))
         
-        with pyro.plate("groups", n_groups):
-          #random_effects = pyro.sample("random_effects", dist.Normal(0, sigma))
-          random_effects = pyro.sample("random_effects", dist.Gamma(alpha_, lambda_))
+      #   with pyro.plate("groups", n_groups):
+      #     #random_effects = pyro.sample("random_effects", dist.Normal(0, sigma))
+      #     random_effects = pyro.sample("random_effects", dist.Gamma(alpha_, lambda_))
 
       with pyro.plate("data", n_cells, dim = -2):
         eta = torch.matmul(model_matrix, beta.T)  + torch.log(UMI).unsqueeze(1)
         
-        if group_matrix is not None:
-            w = torch.matmul(group_matrix, random_effects)
+        # if group_matrix is not None:
+        #     w = torch.matmul(group_matrix, random_effects)
 
-            gamma = 1 / theta + sigma / theta + sigma
+        #     gamma = 1 / theta + sigma / theta + sigma
             
-            eta = eta + torch.log(w)
-            pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1/theta) , total_count=1/theta), obs = input_matrix)
+        #     eta = eta + torch.log(w)
+        #     pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1/theta) , total_count=1/theta), obs = input_matrix)
 
-        else:
-          pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta) , total_count=1/theta), obs = input_matrix)
+        # else:
+        pyro.sample("obs", dist.NegativeBinomial(logits = eta - torch.log(1 / theta) , total_count=1/theta), obs = input_matrix)
 
 
 def model_old(input_matrix, 

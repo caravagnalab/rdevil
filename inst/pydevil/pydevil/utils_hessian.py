@@ -30,7 +30,6 @@ def compute_hessians(input_matrix, model_matrix, coeff, overdispersion, size_fac
             overdispersion=overdispersion[gene_idx],
             size_factors=size_factors
         )
-        #print("Cuda memory : ", torch.cuda.mem_get_info())
 
         t.set_description('Variance estimation: {:.2f}  '.format(gene_idx / n_genes))
         t.refresh()
@@ -95,7 +94,11 @@ def compute_sandwiches(input_matrix, model_matrix, coeff, overdispersion, size_f
         t.set_description('Clustered variance estimation: {:.2f}  '.format(gene_idx / n_genes))
         t.refresh()
 
+        if torch.cuda.is_available():
+            s = s.detach().cpu()
+
         loc[gene_idx, :, :] = s
+        del s
 
     return loc
 
@@ -115,7 +118,7 @@ def compute_clustered_meat(design_matrix, y, beta, alpha, cluster=None):
     cluster = torch.as_tensor(cluster)
 
     if len(cluster) != n:
-        raise ValueError("Number of observations in 'cluster' and 'estfun()' do not match")
+        raise ValueError("Number of observations in 'cluster' and in 'y' do not match")
 
     if cluster.isnan().any():
         raise ValueError("Cannot handle NAs in 'cluster'")

@@ -32,19 +32,19 @@ def guide(input_matrix,
         beta_loc = pyro.param("beta_loc", torch.ones(n_genes, n_features) * gauss_loc, constraint=constraints.positive)
 
     theta_p = pyro.param("theta_p", dispersion_priors, constraint=constraints.positive)
-    s = pyro.param("s", torch.ones(n_genes) * 0.001, constraint=constraints.greater_than(torch.finfo().tiny))
+    # s = pyro.param("s", torch.ones(n_genes) * 0.001, constraint=constraints.greater_than(torch.finfo().tiny))
     
-    if group_matrix is not None:
-        n_groups = group_matrix.shape[1]
-        w = pyro.param("w", torch.ones(n_groups, n_genes) * 1e-3, constraint=constraints.positive)
+    # if group_matrix is not None:
+    #     n_groups = group_matrix.shape[1]
+    #     w = pyro.param("w", torch.ones(n_groups, n_genes) * 1e-3, constraint=constraints.positive)
 
     with pyro.plate("genes", n_genes, dim=-1):    
         pyro.sample("theta", dist.Delta(theta_p))
-        pyro.sample("sigma", dist.Delta(s))
+        # pyro.sample("sigma", dist.Delta(s))
 
-        if group_matrix is not None:
-            with pyro.plate("groups", n_groups, dim = -2):
-                pyro.sample("random_effects", dist.Delta(w))
+        # if group_matrix is not None:
+        #     with pyro.plate("groups", n_groups, dim = -2):
+        #         pyro.sample("random_effects", dist.Delta(w))
         
         if full_cov:
             pyro.sample("beta", dist.MultivariateNormal(beta_mean, scale_tril = beta_loc, validate_args=False))
