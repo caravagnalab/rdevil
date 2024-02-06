@@ -13,15 +13,14 @@
 #' variables in the model. Each row represents a cell and each columns
 #' represent a predictor variable (e.g experimental conditions, biological
 #' factors, treatment groups, batch effects, ...)
-#' @param ncounts Vector with length equal to the number of cells. It
-#' contains some kind of factor relate to the library size. For example,
-#' it might contain the total UMI of each cell (i.e. colSums(input_matrix))
-#' or the UMI of each cell divided by the average across all of them.
+#' @param size_factors Boolean. Decides if a scaling factor for the
+#' expression of each cell should be computed
 #' @param group_matrix .
 #' @param gene_specific_model_tensor .
 #' @param kernel_input .
 #' @param gene_names Vector containing the names of the genes
 #' @param cell_names Vector containing the names of the cells
+#' @param variance String. Either "VI_Estimate" or "Hessian".
 #' @param inference_method String. Either "SVI" or "HMC"
 #' @param method_specific_args List containing additional arguments.
 #' The available arguments differs between the inference algorithms.

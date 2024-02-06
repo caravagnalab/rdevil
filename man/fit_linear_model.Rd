@@ -7,12 +7,13 @@
 fit_linear_model(
   input_matrix,
   model_matrix,
-  ncounts,
+  size_factors = TRUE,
   group_matrix = NULL,
   gene_specific_model_tensor = NULL,
   kernel_input = NULL,
   gene_names = NULL,
   cell_names = NULL,
+  variance = "VI_Estimate",
   inference_method = "SVI",
   method_specific_args = list()
 )
@@ -28,10 +29,8 @@ variables in the model. Each row represents a cell and each columns
 represent a predictor variable (e.g experimental conditions, biological
 factors, treatment groups, batch effects, ...)}
 
-\item{ncounts}{Vector with length equal to the number of cells. It
-contains some kind of factor relate to the library size. For example,
-it might contain the total UMI of each cell (i.e. colSums(input_matrix))
-or the UMI of each cell divided by the average across all of them.}
+\item{size_factors}{Boolean. Decides if a scaling factor for the
+expression of each cell should be computed}
 
 \item{group_matrix}{.}
 
@@ -42,6 +41,8 @@ or the UMI of each cell divided by the average across all of them.}
 \item{gene_names}{Vector containing the names of the genes}
 
 \item{cell_names}{Vector containing the names of the cells}
+
+\item{variance}{String. Either "VI_Estimate" or "Hessian".}
 
 \item{inference_method}{String. Either "SVI" or "HMC"}
 
@@ -56,6 +57,8 @@ SVI only:
 \item \code{gamma_lr} parameters to tune the decay of the learning rate using "ClippedAdam";
 \item \code{batch_size} number of data points or observations sampled from the input matrix in
 each iteration of the optimization algorithm;
+\item \code{threshold} parameters to stop the inference earlier when convergence is reached.
+Default value is set to 0, i.e. all steps will be done;
 }
 
 HMC only:
@@ -68,7 +71,7 @@ posterior samples each chain will produce;
 
 Shared:
 \itemize{
-\item \code{cuda} ;
+\item \code{cuda} Boolean, indicates if CUDA should be used if available;
 \item \code{jit_compile} ;
 \item \code{full_cov} ;
 \item \code{theta_bounds} ;
