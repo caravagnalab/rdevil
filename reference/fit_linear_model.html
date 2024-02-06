@@ -59,12 +59,13 @@ later be tested in order to find differentially expressed genes.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">fit_linear_model</span><span class="op">(</span></span>
 <span>  <span class="va">input_matrix</span>,</span>
 <span>  <span class="va">model_matrix</span>,</span>
-<span>  <span class="va">ncounts</span>,</span>
+<span>  size_factors <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  group_matrix <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  gene_specific_model_tensor <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  kernel_input <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  gene_names <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cell_names <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  variance <span class="op">=</span> <span class="st">"VI_Estimate"</span>,</span>
 <span>  inference_method <span class="op">=</span> <span class="st">"SVI"</span>,</span>
 <span>  method_specific_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -86,11 +87,9 @@ represent a predictor variable (e.g experimental conditions, biological
 factors, treatment groups, batch effects, ...)</p></dd>
 
 
-<dt>ncounts</dt>
-<dd><p>Vector with length equal to the number of cells. It
-contains some kind of factor relate to the library size. For example,
-it might contain the total UMI of each cell (i.e. colSums(input_matrix))
-or the UMI of each cell divided by the average across all of them.</p></dd>
+<dt>size_factors</dt>
+<dd><p>Boolean. Decides if a scaling factor for the
+expression of each cell should be computed</p></dd>
 
 
 <dt>group_matrix</dt>
@@ -113,6 +112,10 @@ or the UMI of each cell divided by the average across all of them.</p></dd>
 <dd><p>Vector containing the names of the cells</p></dd>
 
 
+<dt>variance</dt>
+<dd><p>String. Either "VI_Estimate" or "Hessian".</p></dd>
+
+
 <dt>inference_method</dt>
 <dd><p>String. Either "SVI" or "HMC"</p></dd>
 
@@ -126,11 +129,13 @@ The available arguments differs between the inference algorithms.</p>
 <li><p><code>gamma_lr</code> parameters to tune the decay of the learning rate using "ClippedAdam";</p></li>
 <li><p><code>batch_size</code> number of data points or observations sampled from the input matrix in
 each iteration of the optimization algorithm;</p></li>
+<li><p><code>threshold</code> parameters to stop the inference earlier when convergence is reached.
+Default value is set to 0, i.e. all steps will be done;</p></li>
 </ul><p>HMC only:</p><ul><li><p><code>num_samples</code> number of iterations after the warmup-phase, it also indicates the
 posterior samples each chain will produce;</p></li>
 <li><p><code>num_chains</code> number of chains for the optimization algorithm;</p></li>
 <li><p><code>warmup_steps</code> number of iterations of the warmup-phase;</p></li>
-</ul><p>Shared:</p><ul><li><p><code>cuda</code> ;</p></li>
+</ul><p>Shared:</p><ul><li><p><code>cuda</code> Boolean, indicates if CUDA should be used if available;</p></li>
 <li><p><code>jit_compile</code> ;</p></li>
 <li><p><code>full_cov</code> ;</p></li>
 <li><p><code>theta_bounds</code> ;</p></li>
