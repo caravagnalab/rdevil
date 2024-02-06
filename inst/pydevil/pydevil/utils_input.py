@@ -86,6 +86,8 @@ def check_and_prepare_input_run_SVDE(input_matrix, model_matrix, size_factors, g
 
     if input_matrix.size(0) != model_matrix.size(0):
         raise ValueError("The number of rows in the input_matrix and model_matrix should be the same!")
+    
+    print("Fitting SVDE model with", input_matrix.size(0), "cells and", input_matrix.size(1), "genes.")
 
     validate_boolean(size_factors, "size_factors")
 

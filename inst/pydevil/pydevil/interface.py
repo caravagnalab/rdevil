@@ -122,7 +122,7 @@ def run_SVDE(
     input_data['offset_matrix'] = detach_tensor(input_data['offset_matrix'])
     input_data['beta_estimate_matrix'] = detach_tensor(input_data['beta_estimate_matrix'])
     input_data['dispersion_priors'] = detach_tensor(input_data['dispersion_priors'])
-    input_data['cluster'] = detach_tensor(input_data['cluster'])
+    input_data['clusters'] = detach_tensor(input_data['clusters'])
     input_matrix = detach_tensor(input_matrix)
     model_matrix = detach_tensor(model_matrix)
     overdispersion = detach_tensor(overdispersion)
