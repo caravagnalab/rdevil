@@ -1,5 +1,6 @@
 import torch
 from tqdm import trange
+from pydevil.utils_input import unload_tensor
 
 def compute_hessian(obs, model_matrix, coeff, overdispersion, size_factors):
     beta = torch.tensor(coeff)
@@ -33,8 +34,7 @@ def compute_hessians(input_matrix, model_matrix, coeff, overdispersion, size_fac
 
         t.set_description('Variance estimation: {:.2f}  '.format(gene_idx / n_genes))
         t.refresh()
-        if torch.cuda.is_available():
-            solved_hessian = solved_hessian.detach().cpu()
+        solved_hessian = unload_tensor(solved_hessian)
 
         if full_cov:
             loc[gene_idx, :, :] = solved_hessian
@@ -94,8 +94,7 @@ def compute_sandwiches(input_matrix, model_matrix, coeff, overdispersion, size_f
         t.set_description('Clustered variance estimation: {:.2f}  '.format(gene_idx / n_genes))
         t.refresh()
 
-        if torch.cuda.is_available():
-            s = s.detach().cpu()
+        s = unload_tensor(s)
 
         loc[gene_idx, :, :] = s
         del s

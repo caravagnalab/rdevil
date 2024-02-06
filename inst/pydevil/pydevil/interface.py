@@ -115,6 +115,14 @@ def run_SVDE(
     #lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
     #    total_count= torch.clamp(overdispersion, 1e-9,1e9)).log_prob(input_matrix).sum(dim = 0)
             
+    ret['input_matrix'] = unload_tensor(ret['input_matrix'])
+    ret['model_matrix'] = unload_tensor(ret['model_matrix'])
+    ret['group_matrix'] = unload_tensor(ret['group_matrix'])
+    ret['sf'] = unload_tensor(ret['sf'])
+    ret['offset_matrix'] = unload_tensor(ret['offset_matrix'])
+    ret['beta_estimate_matrix'] = unload_tensor(ret['beta_estimate_matrix'])
+    ret['dispersion_priors'] = unload_tensor(ret['dispersion_priors'])
+    ret['cluster'] = unload_tensor(ret['cluster'])
     input_matrix = unload_tensor(input_matrix)
     model_matrix = unload_tensor(model_matrix)
     overdispersion = unload_tensor(overdispersion)
@@ -149,7 +157,7 @@ def run_SVDE(
             "theta" : overdispersion,
             #"lk" : lk,
             "beta" : coeff,
-            "eta" : eta,
+            #"eta" : eta,
             "variance" : loc,
             "size_factors" : UMI
         },

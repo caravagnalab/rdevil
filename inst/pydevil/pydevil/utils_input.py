@@ -24,10 +24,12 @@ def unload_tensor(obj):
     """
     Unload the tensor from the GPU.
     """
-    if obj.get_device() == 0:
-        return obj.cpu().detach().numpy()
-    else:
-        return obj.detach().numpy()
+    if isinstance(obj, torch.Tensor):
+        if obj.get_device() == 0:
+            return obj.cpu().detach().numpy()
+        else:
+            return obj.detach().numpy()
+    return obj
 
 def validate_boolean(parameter, parameter_name):
     """
