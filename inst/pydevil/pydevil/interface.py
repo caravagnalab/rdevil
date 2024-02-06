@@ -10,7 +10,7 @@ from tqdm import trange
 from pydevil.model import model
 from pydevil.guide import guide
 from pydevil.utils import prepare_batch
-from pydevil.utils_input import check_and_prepare_input_run_SVDE, unload_tensor
+from pydevil.utils_input import check_and_prepare_input_run_SVDE, detach_tensor
 from pydevil.utils_hessian import compute_hessians, compute_sandwiches
 
 def run_SVDE(
@@ -115,20 +115,20 @@ def run_SVDE(
     #lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
     #    total_count= torch.clamp(overdispersion, 1e-9,1e9)).log_prob(input_matrix).sum(dim = 0)
             
-    ret['input_matrix'] = unload_tensor(ret['input_matrix'])
-    ret['model_matrix'] = unload_tensor(ret['model_matrix'])
-    ret['group_matrix'] = unload_tensor(ret['group_matrix'])
-    ret['sf'] = unload_tensor(ret['sf'])
-    ret['offset_matrix'] = unload_tensor(ret['offset_matrix'])
-    ret['beta_estimate_matrix'] = unload_tensor(ret['beta_estimate_matrix'])
-    ret['dispersion_priors'] = unload_tensor(ret['dispersion_priors'])
-    ret['cluster'] = unload_tensor(ret['cluster'])
-    input_matrix = unload_tensor(input_matrix)
-    model_matrix = unload_tensor(model_matrix)
-    overdispersion = unload_tensor(overdispersion)
-    coeff = unload_tensor(coeff)
-    loc = unload_tensor(loc)
-    UMI = unload_tensor(input_data['sf'])
+    ret['input_matrix'] = detach_tensor(ret['input_matrix'])
+    ret['model_matrix'] = detach_tensor(ret['model_matrix'])
+    ret['group_matrix'] = detach_tensor(ret['group_matrix'])
+    ret['sf'] = detach_tensor(ret['sf'])
+    ret['offset_matrix'] = detach_tensor(ret['offset_matrix'])
+    ret['beta_estimate_matrix'] = detach_tensor(ret['beta_estimate_matrix'])
+    ret['dispersion_priors'] = detach_tensor(ret['dispersion_priors'])
+    ret['cluster'] = detach_tensor(ret['cluster'])
+    input_matrix = detach_tensor(input_matrix)
+    model_matrix = detach_tensor(model_matrix)
+    overdispersion = detach_tensor(overdispersion)
+    coeff = detach_tensor(coeff)
+    loc = detach_tensor(loc)
+    UMI = detach_tensor(input_data['sf'])
 
     # if cuda and torch.cuda.is_available():
     #     input_matrix = input_matrix.cpu().detach().numpy()

@@ -20,15 +20,15 @@ def ensure_tensor(obj, cuda):
             print("Error:", e)
             return None
         
-def unload_tensor(obj):
+def detach_tensor(obj):
     """
     Unload the tensor from the GPU.
     """
     if isinstance(obj, torch.Tensor):
         if obj.get_device() == 0:
-            return obj.cpu().detach().numpy()
+            return obj.cpu().detach()
         else:
-            return obj.detach().numpy()
+            return obj.detach()
     return obj
 
 def validate_boolean(parameter, parameter_name):
