@@ -69,8 +69,16 @@ def check_and_prepare_input_run_SVDE(input_matrix, model_matrix, size_factors, g
     """
     validate_boolean(cuda, "cuda")
     if cuda and torch.cuda.is_available():
+       print("GPU usage was requested and and will be used!")
        torch.set_default_device("cuda:0")
+    elif cuda and not torch.cuda.is_available():
+       print("GPU usage was requested but is not available! Using CPU instead.")
+       torch.set_default_device("cpu")
+    elif not cuda and torch.cuda.is_available():
+       print("GPU usage was not requested but is available! Using CPU instead.")
+       torch.set_default_device("cpu")
     else:
+       print("GPU usage was not requested and is not available! Using CPU.")
        torch.set_default_device("cpu")
 
     input_matrix = ensure_tensor(input_matrix, cuda=cuda).int()
