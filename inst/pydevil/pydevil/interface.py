@@ -10,7 +10,7 @@ from tqdm import trange
 from pydevil.model import model
 from pydevil.guide import guide
 from pydevil.utils import prepare_batch
-from pydevil.utils_input import check_and_prepare_input_run_SVDE
+from pydevil.utils_input import check_and_prepare_input_run_SVDE, unload_tensor
 from pydevil.utils_hessian import compute_hessians, compute_sandwiches
 
 def run_SVDE(
@@ -114,27 +114,34 @@ def run_SVDE(
     #variance =  eta + eta**2 / overdispersion
     #lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
     #    total_count= torch.clamp(overdispersion, 1e-9,1e9)).log_prob(input_matrix).sum(dim = 0)
+            
+    input_matrix = unload_tensor(input_matrix)
+    model_matrix = unload_tensor(model_matrix)
+    overdispersion = unload_tensor(overdispersion)
+    coeff = unload_tensor(coeff)
+    loc = unload_tensor(loc)
+    UMI = unload_tensor(input_data['sf'])
 
-    if cuda and torch.cuda.is_available():
-        input_matrix = input_matrix.cpu().detach().numpy()
-        model_matrix = model_matrix.cpu().detach().numpy()
-        overdispersion = overdispersion.cpu().detach().numpy()
-        #eta = eta.cpu().detach().numpy()
-        # variance = variance.cpu().detach().numpy()
-        coeff = coeff.cpu().detach().numpy()
-        loc = loc.cpu().detach().numpy()
-        # lk = lk.cpu().detach().numpy()
-        UMI = input_data['sf'].cpu().detach().numpy()
-    else:
-        input_matrix = input_matrix.detach().numpy()
-        model_matrix = model_matrix.detach().numpy()
-        overdispersion = overdispersion.detach().numpy()
-        #eta = eta.detach().numpy()
-        coeff = coeff.detach().numpy()
-        #variance = variance.detach().numpy()
-        loc = loc.detach().numpy()
-        # lk = lk.detach().numpy()
-        UMI = input_data['sf'].detach().numpy()
+    # if cuda and torch.cuda.is_available():
+    #     input_matrix = input_matrix.cpu().detach().numpy()
+    #     model_matrix = model_matrix.cpu().detach().numpy()
+    #     overdispersion = overdispersion.cpu().detach().numpy()
+    #     #eta = eta.cpu().detach().numpy()
+    #     # variance = variance.cpu().detach().numpy()
+    #     coeff = coeff.cpu().detach().numpy()
+    #     loc = loc.cpu().detach().numpy()
+    #     # lk = lk.cpu().detach().numpy()
+    #     UMI = input_data['sf'].cpu().detach().numpy()
+    # else:
+    #     input_matrix = input_matrix.detach().numpy()
+    #     model_matrix = model_matrix.detach().numpy()
+    #     overdispersion = overdispersion.detach().numpy()
+    #     #eta = eta.detach().numpy()
+    #     coeff = coeff.detach().numpy()
+    #     #variance = variance.detach().numpy()
+    #     loc = loc.detach().numpy()
+    #     # lk = lk.detach().numpy()
+    #     UMI = input_data['sf'].detach().numpy()
 
     ret = {
         "loss" : elbo_list,
