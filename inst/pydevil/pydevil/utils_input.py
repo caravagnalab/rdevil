@@ -9,16 +9,13 @@ def ensure_tensor(obj, cuda):
     """
     Ensure that the input object is converted into a PyTorch tensor.
     """
-    if isinstance(obj, torch.Tensor):
-        if cuda and torch.cuda.is_available():
-            return obj.cuda()
-    else:
-        try:
-            if cuda and torch.cuda.is_available():
-                return torch.tensor(obj).cuda()
-        except Exception as e:
-            print("Error:", e)
-            return None
+    if not isinstance(obj, torch.Tensor):
+        obj = torch.tensor(obj)
+    
+    if cuda:
+        if torch.cuda.is_available():
+            obj = obj.cuda()
+    return obj
         
 def detach_tensor(obj):
     """
@@ -26,9 +23,9 @@ def detach_tensor(obj):
     """
     if isinstance(obj, torch.Tensor):
         if obj.get_device() == 0:
-            return obj.cpu().detach()
+            return obj.cpu().detach().numpy()
         else:
-            return obj.detach()
+            return obj.detach().numpy()
     return obj
 
 def validate_boolean(parameter, parameter_name):
@@ -101,7 +98,7 @@ def check_and_prepare_input_run_SVDE(input_matrix, model_matrix, size_factors, g
         kernel_input = ensure_tensor(kernel_input, cuda=cuda).float()
 
     if gene_names is not None:
-        if len(gene_names) != model_matrix.size(1):
+        if len(gene_names) != input_matrixinpu  .size(1):
             raise ValueError("The number of gene_names should be the same as the number of columns in model_matrix!")
 
     if cell_names is not None:
