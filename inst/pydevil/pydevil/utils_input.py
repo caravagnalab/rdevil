@@ -16,8 +16,19 @@ def ensure_tensor(obj, cuda):
         if torch.cuda.is_available():
             obj = obj.cuda()
     return obj
-        
+
 def detach_tensor(obj):
+    """
+    Unload the tensor from the GPU.
+    """
+    if isinstance(obj, torch.Tensor):
+        if obj.get_device() == 0:
+            return obj.cpu().detach()
+        else:
+            return obj.detach()
+    return obj
+        
+def detach_tensor_and_numpy(obj):
     """
     Unload the tensor from the GPU.
     """

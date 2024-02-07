@@ -10,7 +10,7 @@ from tqdm import trange
 from pydevil.model import model
 from pydevil.guide import guide
 from pydevil.utils import prepare_batch
-from pydevil.utils_input import check_and_prepare_input_run_SVDE, detach_tensor
+from pydevil.utils_input import check_and_prepare_input_run_SVDE, detach_tensor, detach_tensor_and_numpy
 from pydevil.utils_hessian import compute_hessians, compute_sandwiches
 
 def run_SVDE(
@@ -115,20 +115,20 @@ def run_SVDE(
     #lk = dist.NegativeBinomial(logits = eta - torch.log(overdispersion) ,
     #    total_count= torch.clamp(overdispersion, 1e-9,1e9)).log_prob(input_matrix).sum(dim = 0)
             
-    input_data['input_matrix'] = detach_tensor(input_data['input_matrix'])
-    input_data['model_matrix'] = detach_tensor(input_data['model_matrix'])
-    input_data['group_matrix'] = detach_tensor(input_data['group_matrix'])
-    input_data['sf'] = detach_tensor(input_data['sf'])
-    input_data['offset_matrix'] = detach_tensor(input_data['offset_matrix'])
-    input_data['beta_estimate_matrix'] = detach_tensor(input_data['beta_estimate_matrix'])
-    input_data['dispersion_priors'] = detach_tensor(input_data['dispersion_priors'])
-    input_data['clusters'] = detach_tensor(input_data['clusters'])
-    input_matrix = detach_tensor(input_matrix)
-    model_matrix = detach_tensor(model_matrix)
-    overdispersion = detach_tensor(overdispersion)
-    coeff = detach_tensor(coeff)
-    loc = detach_tensor(loc)
-    UMI = detach_tensor(input_data['sf'])
+    input_data['input_matrix'] = detach_tensor_and_numpy(input_data['input_matrix'])
+    input_data['model_matrix'] = detach_tensor_and_numpy(input_data['model_matrix'])
+    input_data['group_matrix'] = detach_tensor_and_numpy(input_data['group_matrix'])
+    input_data['sf'] = detach_tensor_and_numpy(input_data['sf'])
+    input_data['offset_matrix'] = detach_tensor_and_numpy(input_data['offset_matrix'])
+    input_data['beta_estimate_matrix'] = detach_tensor_and_numpy(input_data['beta_estimate_matrix'])
+    input_data['dispersion_priors'] = detach_tensor_and_numpy(input_data['dispersion_priors'])
+    input_data['clusters'] = detach_tensor_and_numpy(input_data['clusters'])
+    input_matrix = detach_tensor_and_numpy(input_matrix)
+    model_matrix = detach_tensor_and_numpy(model_matrix)
+    overdispersion = detach_tensor_and_numpy(overdispersion)
+    coeff = detach_tensor_and_numpy(coeff)
+    loc = detach_tensor_and_numpy(loc)
+    UMI = detach_tensor_and_numpy(input_data['sf'])
 
     # if cuda and torch.cuda.is_available():
     #     input_matrix = input_matrix.cpu().detach().numpy()
