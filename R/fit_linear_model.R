@@ -101,8 +101,8 @@ fit_linear_model <- function(
         names(ret$params$theta) <- colnames(input_matrix)
         colnames(ret$params$eta) <- colnames(input_matrix)
         rownames(ret$params$eta) <- rownames(input_matrix)
-        colnames(ret$residuals) <- colnames(input_matrix)
-        rownames(ret$residuals) <- rownames(input_matrix)
+        # colnames(ret$residuals) <- colnames(input_matrix)
+        # rownames(ret$residuals) <- rownames(input_matrix)
         colnames(ret$params$beta) <- colnames(input_matrix)
       } else if (inference_method == "HMC") {
         if (length(method_specific_args) == 0) method_specific_args <- HMC_default_agrs()
