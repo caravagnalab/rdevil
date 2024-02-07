@@ -99,8 +99,8 @@ fit_linear_model <- function(
         ret <- do.call(py$run_SVDE, method_specific_args)
 
         names(ret$params$theta) <- colnames(input_matrix)
-        colnames(ret$params$eta) <- colnames(input_matrix)
-        rownames(ret$params$eta) <- rownames(input_matrix)
+        #colnames(ret$params$eta) <- colnames(input_matrix)
+        #rownames(ret$params$eta) <- rownames(input_matrix)
         # colnames(ret$residuals) <- colnames(input_matrix)
         # rownames(ret$residuals) <- rownames(input_matrix)
         colnames(ret$params$beta) <- colnames(input_matrix)
